@@ -4,7 +4,7 @@
 
 A deterministic regulatory scoping tool for people who don't yet know which rules apply to them.
 
-**[Open the live app →](https://umutkarakurt.github.io/applicability-register/)**
+**[Open the live app →](https://github.com/umutkarakurt/applicability-register/)**
 
 Answer a short questionnaire — where you operate, what you do, what data you touch, your role in AI - and it returns the information security, data protection and AI governance instruments that apply, grouped by how binding they are, each with its obligations, issuing authority and a link to the primary source.
 
