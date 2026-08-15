@@ -6,7 +6,7 @@ A deterministic regulatory scoping tool for people who don't yet know which rule
 
 **[Open the live app →](https://umutkarakurt.github.io/applicability-register/)** · [Source](https://github.com/umutkarakurt/applicability-register)
 
-Answer a short questionnaire — where you operate, what you do, what data you touch, your role in AI — and it returns the information security, data protection and AI governance instruments that apply, grouped by how binding they are, each with its obligations, issuing authority and a link to the primary source.
+Answer a short questionnaire — where you operate, what you do, what data you touch, your role in AI - and it returns the information security, data protection and AI governance instruments that apply, grouped by how binding they are, each with its obligations, issuing authority and a link to the primary source.
 
 It runs entirely in your browser. One HTML file, no install, no build step, no server, no account. Nothing you type is transmitted anywhere.
 
@@ -16,7 +16,7 @@ It runs entirely in your browser. One HTML file, no install, no build step, no s
 
 The register covers **information security, cybersecurity, data protection and AI governance**.
 
-It does **not** systematically cover financial services and prudential regulation, tax, AML and sanctions, employment, consumer protection, competition, or sustainability reporting. A handful of instruments from those domains appear — SOX, FINRA, DORA, PSD2, BaFin, SAMA — but only because they carry a security, recordkeeping or ICT-risk obligation. Those domains were never swept.
+It does **not** systematically cover financial services and prudential regulation, tax, AML and sanctions, employment, consumer protection, competition, or sustainability reporting. A handful of instruments from those domains appear — SOX, FINRA, DORA, PSD2, BaFin, SAMA - but only because they carry a security, recordkeeping or ICT-risk obligation. Those domains were never swept.
 
 **A silence in an out-of-scope domain is not a negative finding.** The register was not looking.
 
@@ -62,7 +62,7 @@ Results are tiered — **Mandatory**, **Conditional**, **Frameworks and standard
 
 **Offline:** download [`index.html`](index.html) and double-click it. The only outbound request is a webfont, which fails silently and falls back to system fonts. Regulator links are only fetched when you click one.
 
-**Output:** *Copy register* puts a plain-text summary on the clipboard. *Print / PDF report* generates a standalone document containing the scope you declared plus every in-scope instrument fully expanded, ready to print or save as PDF. The scope declaration matters — a scoping output without a record of its inputs is unauditable, because six months later nobody can tell whether an instrument is absent because it did not apply or because someone answered the wrong question.
+**Output:** *Copy register* puts a plain-text summary on the clipboard. *Print / PDF report* generates a standalone document containing the scope you declared plus every in-scope instrument fully expanded, ready to print or save as PDF. The scope declaration matters - a scoping output without a record of its inputs is unauditable, because six months later nobody can tell whether an instrument is absent because it did not apply or because someone answered the wrong question.
 
 `src/applicability-register.jsx` is the React source. `index.html` is generated from it, with the rule catalogue transferred verbatim rather than retyped.
 
@@ -97,7 +97,7 @@ No warranty is given as to accuracy, completeness or currency. Use at your own r
 
 I built this with [Claude](https://claude.ai) (Anthropic) as a working partner — drafting the catalogue, writing the rules engine and the interface, verifying statuses against primary sources, and arguing with me about the design.
 
-That collaboration is worth being precise about, because it is also the reason for the disclaimer above. A language model is very good at producing a fluent, plausible regulatory citation and only sometimes good at producing a correct one. Everything here was pushed through a fixed rules engine, spot-checked against official sources, and covered by automated assertions over the trigger logic — and it still carries errors I have not found yet. The design of the tool assumes this about itself. So should you.
+That collaboration is worth being precise about, because it is also the reason for the disclaimer above. A language model is very good at producing a fluent, plausible regulatory citation and only sometimes good at producing a correct one. Everything here was pushed through a fixed rules engine, spot-checked against official sources, and covered by automated assertions over the trigger logic - and it still carries errors I have not found yet. The design of the tool assumes this about itself. So should you.
 
 Curation, scope decisions, jurisdictional priorities and final judgement are mine.
 
@@ -119,6 +119,6 @@ Open an issue with the instrument name and a primary source. Rules live in the `
 
 [MIT No Attribution (MIT-0)](LICENSE).
 
-Do anything you like with it — use it, change it, sell it, fork it, strip my name off it. No attribution required, no conditions attached.
+Do anything you like with it - use it, change it, sell it, fork it, strip my name off it. No attribution required, no conditions attached.
 
 The license covers this code and the compiled summaries in it. It does not and cannot cover the underlying laws, standards and regulations themselves, which have their own rights holders — ISO standards in particular are copyrighted and must be purchased from ISO or a national member body.
