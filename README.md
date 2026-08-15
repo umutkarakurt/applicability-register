@@ -4,9 +4,9 @@
 
 A deterministic regulatory scoping tool for people who don't yet know which rules apply to them.
 
-**[Open the live app →](https://YOUR-USERNAME.github.io/applicability-register/)**
+**[Open the live app →](https://umutkarakurt.github.io/applicability-register/)**
 
-Answer a short questionnaire — where you operate, what you do, what data you touch, your role in AI — and it returns the information security, data protection and AI governance instruments that apply, grouped by how binding they are, each with its obligations, issuing authority and a link to the primary source.
+Answer a short questionnaire — where you operate, what you do, what data you touch, your role in AI - and it returns the information security, data protection and AI governance instruments that apply, grouped by how binding they are, each with its obligations, issuing authority and a link to the primary source.
 
 It runs entirely in your browser. One HTML file, no install, no build step, no server, no account. Nothing you type is transmitted anywhere.
 
@@ -16,7 +16,7 @@ It runs entirely in your browser. One HTML file, no install, no build step, no s
 
 The register covers **information security, cybersecurity, data protection and AI governance**.
 
-It does **not** systematically cover financial services and prudential regulation, tax, AML and sanctions, employment, consumer protection, competition, or sustainability reporting. A handful of instruments from those domains appear — SOX, FINRA, DORA, PSD2, BaFin, SAMA — but only because they carry a security, recordkeeping or ICT-risk obligation. Those domains were never swept.
+It does **not** systematically cover financial services and prudential regulation, tax, AML and sanctions, employment, consumer protection, competition, or sustainability reporting. A handful of instruments from those domains appear - SOX, FINRA, DORA, PSD2, BaFin, SAMA - but only because they carry a security, recordkeeping or ICT-risk obligation. Those domains were never swept.
 
 **A silence in an out-of-scope domain is not a negative finding.** The register was not looking.
 
@@ -30,7 +30,7 @@ That design was chosen on purpose. A regulatory mapping tool lives or dies on ci
 
 Three properties follow from that choice:
 
-**Every result shows its derivation.** Each card carries the trigger trace that produced it — `Germany ∧ personal data → obligations`. You can see why something surfaced, and challenge it.
+**Every result shows its derivation.** Each card carries the trigger trace that produced it - `Germany ∧ personal data → obligations`. You can see why something surfaced, and challenge it.
 
 **Unanswered reads as no, and the tool says so.** A blank question silently suppresses instruments, so the app counts unanswered questions and warns you rather than guessing.
 
@@ -76,7 +76,7 @@ These are real and you should read them before trusting an output.
 - **Sector granularity is coarse.** "Banking and payments" is one tag, so instruments that should separate do not always separate.
 - **No conflict detection.** DIFC and ADGM correctly exclude the UAE onshore regime, and DORA correctly displaces NIS2 for financial entities, but the tool will not tell you when EU standard contractual clauses and China's CAC transfer route collide.
 - **Known gaps.** AML, sanctions and export controls are absent as a domain. So are most US state comprehensive privacy laws beyond the encoded ones, the US state AI employment cluster, and several EU instruments including the revised Product Liability Directive. Each of these needs a question the form does not yet ask.
-- **Effective dates decay.** Statuses were verified in August 2026. Regulatory dates move constantly — the Colorado AI Act was repealed and replaced before it ever took effect, and the EU AI Act's high-risk deadlines have already shifted twice. Assume this file is stale and check the primary source.
+- **Effective dates decay.** Statuses were verified in August 2026. Regulatory dates move constantly - the Colorado AI Act was repealed and replaced before it ever took effect, and the EU AI Act's high-risk deadlines have already shifted twice. Assume this file is stale and check the primary source.
 - **Some links point to regulator portals rather than statute pages,** deliberately, because deep-linked PDFs rot and a wrong citation is worse than an extra click.
 
 ---
@@ -95,7 +95,7 @@ No warranty is given as to accuracy, completeness or currency. Use at your own r
 
 ## Built with Claude
 
-I built this with [Claude](https://claude.ai) (Anthropic) as a working partner — drafting the catalogue, writing the rules engine and the interface, verifying statuses against primary sources, and arguing with me about the design.
+I built this with [Claude](https://claude.ai) (Anthropic) as a working partner - drafting the catalogue, writing the rules engine and the interface, verifying statuses against primary sources, and arguing with me about the design.
 
 That collaboration is worth being precise about, because it is also the reason for the disclaimer above. A language model is very good at producing a fluent, plausible regulatory citation and only sometimes good at producing a correct one. Everything here was pushed through a fixed rules engine, spot-checked against official sources, and covered by automated assertions over the trigger logic — and it still carries errors I have not found yet. The design of the tool assumes this about itself. So should you.
 
@@ -119,6 +119,6 @@ Open an issue with the instrument name and a primary source. Rules live in the `
 
 [MIT No Attribution (MIT-0)](LICENSE).
 
-Do anything you like with it — use it, change it, sell it, fork it, strip my name off it. No attribution required, no conditions attached.
+Do anything you like with it - use it, change it, sell it, fork it, strip my name off it. No attribution required, no conditions attached.
 
 The license covers this code and the compiled summaries in it. It does not and cannot cover the underlying laws, standards and regulations themselves, which have their own rights holders — ISO standards in particular are copyrighted and must be purchased from ISO or a national member body.
