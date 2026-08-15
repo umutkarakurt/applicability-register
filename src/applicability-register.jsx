@@ -1,0 +1,2272 @@
+import React, { useState, useMemo } from "react";
+
+/* ------------------------------------------------------------------
+   APPLICABILITY REGISTER
+   A deterministic regulatory scoping instrument.
+   Every instrument below fires from an explicit, inspectable predicate.
+   No model calls, no generated citations.
+------------------------------------------------------------------- */
+
+const TERRITORY_GROUPS = [
+  {
+    label: "Europe",
+    items: [
+      { id: "eu", code: "EU", name: "EU / EEA (no member state selected)" },
+      { id: "de", code: "DE", name: "Germany" },
+      { id: "uk", code: "UK", name: "United Kingdom" },
+      { id: "ch", code: "CH", name: "Switzerland" },
+    ],
+  },
+  {
+    label: "United States",
+    items: [
+      { id: "us", code: "US", name: "Federal / nationwide" },
+      { id: "us-ca", code: "US·CA", name: "California" },
+      { id: "us-co", code: "US·CO", name: "Colorado" },
+      { id: "us-va", code: "US·VA", name: "Virginia" },
+      { id: "us-ct", code: "US·CT", name: "Connecticut" },
+      { id: "us-tx", code: "US·TX", name: "Texas" },
+      { id: "us-ny", code: "US·NY", name: "New York" },
+      { id: "us-il", code: "US·IL", name: "Illinois" },
+      { id: "us-md", code: "US·MD", name: "Maryland" },
+    ],
+  },
+  {
+    label: "Gulf",
+    items: [
+      { id: "ae", code: "AE", name: "UAE (onshore)" },
+      { id: "difc", code: "DIFC", name: "DIFC" },
+      { id: "adgm", code: "ADGM", name: "ADGM" },
+      { id: "sa", code: "SA", name: "Saudi Arabia" },
+      { id: "qa", code: "QA", name: "Qatar" },
+      { id: "bh", code: "BH", name: "Bahrain" },
+      { id: "om", code: "OM", name: "Oman" },
+      { id: "kw", code: "KW", name: "Kuwait" },
+    ],
+  },
+  {
+    label: "Asia",
+    items: [
+      { id: "tr", code: "TR", name: "Türkiye" },
+      { id: "jp", code: "JP", name: "Japan" },
+      { id: "cn", code: "CN", name: "China (mainland)" },
+      { id: "kr", code: "KR", name: "South Korea" },
+    ],
+  },
+];
+
+const SECTORS = [
+  { id: "general", name: "General commercial" },
+  { id: "saas", name: "Software / cloud services" },
+  { id: "ecommerce", name: "Retail & e-commerce" },
+  { id: "health", name: "Healthcare & life sciences" },
+  { id: "finance", name: "Banking & payments" },
+  { id: "insurance", name: "Insurance" },
+  { id: "platform", name: "Online platform / marketplace" },
+  { id: "ci", name: "Telecom & critical infrastructure" },
+  { id: "public", name: "Government & public sector" },
+  { id: "education", name: "Education" },
+  { id: "defense", name: "Defence & government supply" },
+];
+
+const AI_ROLES = [
+  { id: "none", name: "None", hint: "No AI in products or operations" },
+  { id: "user", name: "We use AI tools", hint: "Third-party AI for internal work" },
+  { id: "deployer", name: "We decide with AI", hint: "AI informs hiring, credit, care, education, policing" },
+  { id: "developer", name: "We build AI systems", hint: "We place AI systems on the market" },
+  { id: "gpai", name: "We provide models", hint: "General-purpose or foundation models" },
+];
+
+const TIERS = [
+  { id: "mandatory", label: "Mandatory", note: "Binding law once the trigger conditions hold" },
+  { id: "conditional", label: "Conditional", note: "Binding only above a threshold or on a specific activity — confirm scope" },
+  { id: "framework", label: "Frameworks & standards", note: "Not law, but the expected evidence base for the obligations above" },
+  { id: "guidance", label: "Guidance & policy", note: "Regulator expectations and soft law that shapes enforcement" },
+];
+
+const CATS = [
+  { id: "all", label: "Everything" },
+  { id: "privacy", label: "Privacy" },
+  { id: "security", label: "Security" },
+  { id: "ai", label: "AI" },
+  { id: "crime", label: "Financial crime" },
+  { id: "sector", label: "Sector" },
+  { id: "standard", label: "Standards" },
+];
+
+/* ------------------------------------------------------------------
+   RULE CATALOGUE
+------------------------------------------------------------------- */
+
+const RULES = [
+  /* ---------- EU / EEA ---------- */
+  {
+    id: "gdpr", code: "EU", tier: "mandatory", cat: "privacy",
+    title: "General Data Protection Regulation (EU) 2016/679",
+    body: "National supervisory authorities · EDPB",
+    what: "The baseline for any personal data processing in, or aimed at, the EEA.",
+    obligations: [
+      "Document a lawful basis for every distinct processing purpose",
+      "Maintain Art. 30 records; run a DPIA before high-risk processing",
+      "Notify the supervisory authority within 72 hours of a qualifying breach",
+      "Answer data subject requests within one month",
+      "Appoint a DPO and/or an Art. 27 representative where the tests are met",
+    ],
+    link: "https://eur-lex.europa.eu/eli/reg/2016/679/oj",
+    why: ["EU/EEA", "personal data"],
+    trigger: (i) => i.t("eu") && i.pii,
+  },
+  {
+    id: "eprivacy", code: "EU", tier: "mandatory", cat: "privacy",
+    title: "ePrivacy Directive 2002/58/EC (as implemented nationally)",
+    body: "National telecom & data protection regulators",
+    what: "Governs cookies, tracking and electronic marketing — separately from the GDPR.",
+    obligations: [
+      "Obtain prior consent for any non-essential storage or access on a device",
+      "Run marketing on an opt-in basis, with the soft opt-in exception applied narrowly",
+      "Implement the rules of each member state you target, not a single EU standard",
+    ],
+    link: "https://eur-lex.europa.eu/eli/dir/2002/58/oj",
+    why: ["EU/EEA", "public-facing digital channel"],
+    trigger: (i) => i.t("eu") && (i.sec("saas") || i.sec("ecommerce") || i.sec("platform")),
+  },
+  {
+    id: "aiact", code: "EU", tier: "mandatory", cat: "ai",
+    title: "EU Artificial Intelligence Act (EU) 2024/1689",
+    body: "AI Office · national market surveillance authorities",
+    what: "Risk-tiered obligations attaching to your role. The Digital Omnibus, in force 27 July 2026, delayed the high-risk deadlines.",
+    obligations: [
+      "Prohibitions have applied since 2 February 2025 and GPAI obligations since 2 August 2025 — these were not delayed",
+      "Article 50 transparency, including synthetic-content marking, applies from 2 December 2026",
+      "Annex III standalone high-risk obligations apply from 2 December 2027; Annex I product-embedded high-risk from 2 August 2028",
+      "Classify each system against the Annex III list now and record the reasoning — the deferral is time, not relief",
+      "High-risk providers: risk and quality management systems, technical file, conformity assessment, registration",
+    ],
+    link: "https://eur-lex.europa.eu/eli/reg/2024/1689/oj",
+    why: ["EU/EEA", "AI in scope"],
+    trigger: (i) => i.t("eu") && i.ai !== "none",
+  },
+  {
+    id: "nis2", code: "EU", tier: "conditional", cat: "security",
+    title: "NIS2 Directive (EU) 2022/2555",
+    body: "National competent authorities & CSIRTs",
+    what: "Cyber risk management and incident reporting for essential and important entities. Financial entities follow DORA instead — see below.",
+    obligations: [
+      "Apply the full size test, not headcount alone: the EU SME definition also counts turnover and balance sheet total",
+      "Check the size-cap exceptions — trust service providers, TLD registries, DNS and public administration are in scope irrespective of size",
+      "Work from the national transposition where you have selected a member state — the directive itself does not bind you directly",
+      "Confirm essential vs important classification under that transposition",
+      "Implement the Art. 21 measures, including supply chain security",
+      "Report significant incidents: early warning at 24h, notification at 72h, final report at one month",
+      "Management bodies approve the measures and carry personal accountability",
+    ],
+    link: "https://eur-lex.europa.eu/eli/dir/2022/2555/oj",
+    why: ["EU/EEA", "in-scope sector", "size test met"],
+    trigger: (i) => i.t("eu") &&
+      ((i.sec("ci") || i.sec("public")) ||
+       ((i.sec("health") || i.sec("saas")) && i.scale !== "<50")),
+  },
+  {
+    id: "dora", code: "EU", tier: "mandatory", cat: "sector",
+    title: "Digital Operational Resilience Act (EU) 2022/2554",
+    body: "EBA · EIOPA · ESMA · national authorities",
+    what: "ICT risk, testing and third-party oversight for EU financial entities.",
+    obligations: [
+      "Treat DORA as lex specialis: it displaces the NIS2 ICT risk and incident duties for financial entities — do not build two parallel reporting processes",
+      "Run an ICT risk management framework reviewed by the management body",
+      "Maintain the register of information on all ICT third-party arrangements",
+      "Classify and report major ICT-related incidents on the prescribed timeline",
+      "Perform threat-led penetration testing if designated for advanced testing",
+    ],
+    link: "https://eur-lex.europa.eu/eli/reg/2022/2554/oj",
+    why: ["EU/EEA", "financial entity"],
+    trigger: (i) => i.t("eu") && (i.sec("finance") || i.sec("insurance")),
+  },
+  {
+    id: "dora3p", code: "EU", tier: "conditional", cat: "sector",
+    title: "DORA — obligations reaching ICT third-party service providers",
+    body: "European Supervisory Authorities · your financial clients",
+    what: "You do not have to be a financial entity for DORA to reach you. It arrives through your contracts.",
+    obligations: [
+      "Expect Art. 30 mandatory contractual terms in every agreement with an EU financial client",
+      "Support your clients' register of information — they must report your details to their supervisor",
+      "Accept audit, access and inspection rights, and exit and termination provisions",
+      "If designated a critical ICT third-party provider, you fall under direct ESA oversight and pay the associated fees",
+    ],
+    link: "https://eur-lex.europa.eu/eli/reg/2022/2554/oj",
+    why: ["EU/EEA", "supplies regulated entities", "not itself a financial entity"],
+    trigger: (i) => i.t("eu") && i.supplier && !(i.sec("finance") || i.sec("insurance")),
+  },
+  {
+    id: "psd2", code: "EU", tier: "mandatory", cat: "sector",
+    title: "PSD2 — Payment Services Directive (EU) 2015/2366 & the SCA RTS",
+    body: "National competent authorities · EBA",
+    what: "Authorisation, strong customer authentication and open banking access for payment services.",
+    obligations: [
+      "Determine whether your activity is a regulated payment service and requires authorisation or registration",
+      "Apply strong customer authentication under Delegated Regulation 2018/389, and apply the exemptions deliberately",
+      "Meet the dedicated interface and fallback requirements if you hold payment accounts",
+      "Report major operational and security incidents under the EBA guidelines",
+      "Track PSD3 and the Payment Services Regulation — the framework is being replaced, and the transition will change authorisation and SCA duties",
+    ],
+    link: "https://eur-lex.europa.eu/eli/dir/2015/2366/oj",
+    why: ["EU/EEA", "banking or payments"],
+    trigger: (i) => i.t("eu") && i.sec("finance"),
+  },
+  {
+    id: "cra", code: "EU", tier: "conditional", cat: "security",
+    title: "Cyber Resilience Act (EU) 2024/2847",
+    body: "European Commission · market surveillance authorities",
+    what: "Security-by-design and vulnerability handling for products with digital elements. Staged: ENISA reporting from 11 September 2026, full obligations 11 December 2027.",
+    obligations: [
+      "Determine whether your product is a product with digital elements placed on the EU market",
+      "Meet the Annex I essential requirements and ship without known exploitable vulnerabilities",
+      "Report actively exploited vulnerabilities and severe incidents to ENISA",
+      "Provide security updates across the declared support period",
+    ],
+    link: "https://eur-lex.europa.eu/eli/reg/2024/2847/oj",
+    why: ["EU/EEA", "software or connected product"],
+    trigger: (i) => i.t("eu") && (i.sec("saas") || i.ai === "developer"),
+  },
+  {
+    id: "dsa", code: "EU", tier: "mandatory", cat: "sector",
+    title: "Digital Services Act (EU) 2022/2065",
+    body: "European Commission · Digital Services Coordinators",
+    what: "Content, transparency and trader traceability duties for intermediaries and platforms.",
+    obligations: [
+      "Publish notice-and-action mechanisms and statements of reasons",
+      "Ban dark patterns and profiling-based advertising to minors",
+      "Verify trader identity if you operate a marketplace",
+      "Meet VLOP duties, including systemic risk assessment, above the user threshold",
+    ],
+    link: "https://eur-lex.europa.eu/eli/reg/2022/2065/oj",
+    why: ["EU/EEA", "platform or marketplace"],
+    trigger: (i) => i.t("eu") && i.sec("platform"),
+  },
+  {
+    id: "eaa", code: "EU", tier: "conditional", cat: "sector",
+    title: "European Accessibility Act — Directive (EU) 2019/882",
+    body: "National market surveillance authorities",
+    what: "Accessibility requirements for consumer-facing digital products and services.",
+    obligations: [
+      "Bring e-commerce, banking and e-book services to the accessibility requirements",
+      "Use EN 301 549 as the presumption-of-conformity route",
+      "Publish accessibility information and keep conformity documentation",
+    ],
+    link: "https://eur-lex.europa.eu/eli/dir/2019/882/oj",
+    why: ["EU/EEA", "consumer digital service"],
+    trigger: (i) => i.t("eu") && (i.sec("ecommerce") || i.sec("finance")),
+  },
+  {
+    id: "whistle", code: "EU", tier: "conditional", cat: "sector",
+    title: "Whistleblower Protection Directive (EU) 2019/1937",
+    body: "National designated authorities",
+    what: "Internal reporting channels — routinely missed in privacy-led scoping.",
+    obligations: [
+      "Operate an internal reporting channel with acknowledgement in 7 days and feedback in 3 months",
+      "Protect reporter identity and prevent retaliation",
+      "Run the channel consistently with the GDPR",
+    ],
+    link: "https://eur-lex.europa.eu/eli/dir/2019/1937/oj",
+    why: ["EU/EEA", "50+ headcount"],
+    trigger: (i) => i.t("eu") && i.scale !== "<50",
+  },
+  {
+    id: "dataact", code: "EU", tier: "conditional", cat: "sector",
+    title: "Data Act (EU) 2023/2854",
+    body: "National competent authorities",
+    what: "Applicable since 12 September 2025. Connected-product design duties from 12 September 2026; the cloud switching-charge ban from 12 January 2027.",
+    obligations: [
+      "Make product and related service data accessible to users by design",
+      "Remove switching charges and support cloud portability",
+      "Review contract terms against the unfairness test",
+    ],
+    link: "https://eur-lex.europa.eu/eli/reg/2023/2854/oj",
+    why: ["EU/EEA", "cloud or connected product"],
+    trigger: (i) => i.t("eu") && i.sec("saas"),
+  },
+
+  /* ---------- Germany ---------- */
+  {
+    id: "bdsg", code: "DE", tier: "mandatory", cat: "privacy",
+    title: "Bundesdatenschutzgesetz (BDSG 2018)",
+    body: "BfDI · sixteen Land supervisory authorities",
+    what: "Germany's use of the GDPR opening clauses. The deviations are where German scoping usually goes wrong.",
+    obligations: [
+      "Appoint a data protection officer once 20 or more people are regularly engaged in automated processing (§ 38) — far below the GDPR's own trigger",
+      "Expect supervision from the Land authority of your establishment, not a single federal regulator",
+      "Treat § 26 employee data processing as unsettled: the CJEU cast doubt on it and a dedicated employee data act has been in preparation",
+      "Apply § 22 conditions before processing special categories outside the GDPR grounds",
+    ],
+    link: "https://www.gesetze-im-internet.de/bdsg_2018/",
+    why: ["Germany", "personal data"],
+    trigger: (i) => i.t("de") && i.pii,
+  },
+  {
+    id: "tdddg", code: "DE", tier: "mandatory", cat: "privacy",
+    title: "TDDDG § 25 — consent for access to terminal equipment",
+    body: "Land data protection authorities",
+    what: "The German cookie rule. Renamed from TTDSG in May 2024 — search the current short title, not the old one.",
+    obligations: [
+      "Take consent before any non-essential storage on or access to a user device, including smart home, messaging and email clients",
+      "Show an equally prominent reject option on the first banner layer",
+      "Note that § 25 applies independently of whether personal data is involved — the GDPR question comes second",
+      "Consider the consent management services regime under § 26 and the Einwilligungsverwaltungsverordnung",
+    ],
+    link: "https://www.gesetze-im-internet.de/",
+    why: ["Germany", "public-facing digital channel"],
+    trigger: (i) => i.t("de") && (i.sec("saas") || i.sec("ecommerce") || i.sec("platform")),
+  },
+  {
+    id: "bsig", code: "DE", tier: "mandatory", cat: "security",
+    title: "BSI-Gesetz as amended by the NIS2UmsuCG",
+    body: "Bundesamt für Sicherheit in der Informationstechnik",
+    what: "The operative German NIS2 text, in force since 6 December 2025 with no transition period.",
+    obligations: [
+      "Test scope at 50 staff or EUR 10m turnover across the eighteen listed sectors — roughly 29,500 entities are caught",
+      "Register through the BSI portal via Mein Unternehmenskonto; the general deadline of 6 March 2026 has passed and late registration remains obligatory",
+      "Report significant incidents at 24 hours, 72 hours and one month (§ 32)",
+      "Implement the ten risk management measures under § 30; operators of critical installations evidence this to the BSI every three years",
+      "Management bodies carry personal liability; fines reach EUR 10m or 2% of global turnover",
+    ],
+    link: "https://www.bsi.bund.de/DE/Themen/Regulierte-Wirtschaft/NIS-2-regulierte-Unternehmen/nis-2-regulierte-unternehmen_node.html",
+    why: ["Germany", "in-scope sector"],
+    trigger: (i) => i.t("de") &&
+      ((i.sec("ci") || i.sec("public")) ||
+       ((i.sec("health") || i.sec("saas") || i.sec("ecommerce")) && i.scale !== "<50")),
+  },
+  {
+    id: "kritisdach", code: "DE", tier: "conditional", cat: "security",
+    title: "KRITIS-Dachgesetz",
+    body: "BBK · sector authorities",
+    what: "Physical resilience of critical entities, transposing the CER Directive alongside NIS2's cyber duties.",
+    obligations: [
+      "Check whether you are a critical installation operator under the revised thresholds",
+      "Build resilience plans covering physical as well as cyber disruption",
+      "Track the KRITIS-Verordnung threshold revisions — they were still being finalised through 2026",
+    ],
+    link: "https://www.bbk.bund.de/",
+    why: ["Germany", "critical infrastructure"],
+    trigger: (i) => i.t("de") && i.sec("ci"),
+  },
+  {
+    id: "kimig", code: "DE", tier: "mandatory", cat: "ai",
+    title: "KI-Marktüberwachungs- und Innovationsförderungsgesetz (KI-MIG)",
+    body: "Bundesnetzagentur",
+    what: "Germany's AI Act execution law, in force since 29 July 2026. It adds no new duties — it makes the AI Act enforceable here.",
+    obligations: [
+      "Direct notifications, complaints and market surveillance contact to the Bundesnetzagentur as the central authority",
+      "Expect sectoral and Land authorities to retain competence in specific fields — the structure is layered, not single-window",
+      "Meet the AI Act transparency duties applying from 2 August 2026, including labelling of chatbots and synthetic content",
+      "Consider the BNetzA service desk and regulatory sandbox, aimed at SMEs and start-ups",
+    ],
+    link: "https://www.bundesnetzagentur.de/DE/Fachthemen/Digitales/KI/start.html",
+    why: ["Germany", "AI in scope"],
+    trigger: (i) => i.t("de") && i.ai !== "none",
+  },
+  {
+    id: "betrvg", code: "DE", tier: "mandatory", cat: "sector",
+    title: "Betriebsverfassungsgesetz § 87(1) No. 6 — works council co-determination",
+    body: "Works council · labour courts",
+    what: "The German control most often missed by non-German scoping. Data protection compliance does not substitute for it.",
+    obligations: [
+      "Obtain works council agreement before introducing any system capable of monitoring employee conduct or performance — the capability is enough, intent is not required",
+      "Negotiate a Betriebsvereinbarung covering HR analytics, productivity tooling, and AI assistants used by staff",
+      "Involve the works council under § 90 on workplace design, and note its § 80(3) right to bring in an expert where AI is introduced",
+      "Treat deployment without agreement as unlawful and enjoinable regardless of GDPR compliance",
+    ],
+    link: "https://www.gesetze-im-internet.de/betrvg/",
+    why: ["Germany", "employee monitoring or AI at work"],
+    trigger: (i) => i.t("de") && (i.pii || i.ai !== "none"),
+  },
+  {
+    id: "hinschg", code: "DE", tier: "conditional", cat: "sector",
+    title: "Hinweisgeberschutzgesetz (HinSchG)",
+    body: "Bundesamt für Justiz",
+    what: "The German whistleblower transposition — it is this, not the directive, that binds you.",
+    obligations: [
+      "Operate an internal reporting channel from 50 employees",
+      "Accept anonymous reports and acknowledge within seven days, feedback within three months",
+      "Keep the channel separate from ordinary HR escalation and document the confidentiality controls",
+    ],
+    link: "https://www.gesetze-im-internet.de/hinschg/",
+    why: ["Germany", "50+ headcount"],
+    trigger: (i) => i.t("de") && i.scale !== "<50",
+  },
+  {
+    id: "lksg", code: "DE", tier: "conditional", cat: "sector",
+    title: "Lieferkettensorgfaltspflichtengesetz (LkSG)",
+    body: "BAFA",
+    what: "In force at 1,000 employees, but actively being wound down — verify status before relying on either direction.",
+    obligations: [
+      "Confirm the 1,000-employee domestic threshold before assuming scope",
+      "Run risk analysis, preventive and remedial measures, and a complaints procedure across the supply chain",
+      "Note that the BAFA reporting obligation has been removed and enforcement softened by the 2025 amendment",
+      "Expect replacement by the CSDDD transposition under Directive (EU) 2026/470: transpose by 26 July 2028, apply from 26 July 2029, scoped at 5,000 employees and EUR 1.5bn turnover",
+      "Smaller suppliers stay affected contractually even when out of legal scope",
+    ],
+    link: "https://www.bafa.de/DE/Lieferketten/lieferketten_node.html",
+    why: ["Germany", "250+ headcount"],
+    trigger: (i) => i.t("de") && i.scale === "250+",
+  },
+  {
+    id: "stgb203", code: "DE", tier: "mandatory", cat: "sector",
+    title: "§ 203 StGB — breach of professional secrecy",
+    body: "Criminal courts",
+    what: "Criminal liability that governs cloud and outsourcing decisions in German healthcare and the professions.",
+    obligations: [
+      "Bring service providers within the § 203(3) category of cooperating persons before granting access",
+      "Bind providers and their staff to secrecy in writing, with the obligation flowed down to subcontractors",
+      "Note that this sits on top of the GDPR — a valid processor agreement does not answer it",
+    ],
+    link: "https://www.gesetze-im-internet.de/stgb/__203.html",
+    why: ["Germany", "healthcare or professional secrecy"],
+    trigger: (i) => i.t("de") && i.sec("health"),
+  },
+  {
+    id: "bafin", code: "DE", tier: "mandatory", cat: "sector",
+    title: "BaFin MaRisk and the BAIT/VAIT transition to DORA",
+    body: "Bundesanstalt für Finanzdienstleistungsaufsicht",
+    what: "German supervisory practice sitting alongside DORA — the boundary moved when DORA became applicable.",
+    obligations: [
+      "Work from DORA for ICT risk and incident reporting; BaFin withdrew or narrowed the BAIT, VAIT, KAIT and ZAIT circulars accordingly — confirm the current position for your licence type",
+      "Continue to meet MaRisk for the wider risk management and outsourcing framework",
+      "Align the DORA register of information with existing BaFin outsourcing notifications rather than maintaining two",
+    ],
+    link: "https://www.bafin.de/DE/Aufsicht/aufsicht_node.html",
+    why: ["Germany", "financial or insurance activity"],
+    trigger: (i) => i.t("de") && (i.sec("finance") || i.sec("insurance")),
+  },
+  {
+    id: "bfsg", code: "DE", tier: "conditional", cat: "sector",
+    title: "Barrierefreiheitsstärkungsgesetz (BFSG)",
+    body: "Marktüberwachungsstelle der Länder",
+    what: "The German European Accessibility Act transposition, applying since 28 June 2025.",
+    obligations: [
+      "Bring consumer-facing e-commerce and banking interfaces to the accessibility requirements",
+      "Publish an accessibility statement and keep conformity documentation",
+      "Check the microenterprise exemption before assuming it applies — it is narrower for services than for products",
+    ],
+    link: "https://www.gesetze-im-internet.de/bfsg/",
+    why: ["Germany", "consumer digital service"],
+    trigger: (i) => i.t("de") && (i.sec("ecommerce") || i.sec("finance")),
+  },
+  {
+    id: "ddg", code: "DE", tier: "mandatory", cat: "sector",
+    title: "Digitale-Dienste-Gesetz (DDG)",
+    body: "Bundesnetzagentur as Digital Services Coordinator",
+    what: "Germany's DSA execution law. It replaced the Telemediengesetz, so TMG citations are stale.",
+    obligations: [
+      "Meet the Impressum and provider identification duties, still a routine enforcement trigger",
+      "Route DSA notice-and-action and complaints handling through the German coordinator",
+    ],
+    link: "https://www.gesetze-im-internet.de/ddg/",
+    why: ["Germany", "digital service or platform"],
+    trigger: (i) => i.t("de") && (i.sec("platform") || i.sec("ecommerce")),
+  },
+
+  /* ---------- UK ---------- */
+  {
+    id: "ukgdpr", code: "UK", tier: "mandatory", cat: "privacy",
+    title: "UK GDPR & Data Protection Act 2018",
+    body: "Information Commissioner's Office",
+    what: "The UK regime — close to the EU GDPR, but diverging in detail.",
+    obligations: [
+      "Register with the ICO and pay the data protection fee",
+      "Maintain records of processing and DPIAs for high-risk activity",
+      "Report qualifying breaches to the ICO within 72 hours",
+      "Track divergence introduced by the Data (Use and Access) Act 2025",
+    ],
+    link: "https://www.legislation.gov.uk/ukpga/2018/12/contents",
+    why: ["United Kingdom", "personal data"],
+    trigger: (i) => i.t("uk") && i.pii,
+  },
+  {
+    id: "pecr", code: "UK", tier: "mandatory", cat: "privacy",
+    title: "Privacy and Electronic Communications Regulations 2003",
+    body: "Information Commissioner's Office",
+    what: "Cookies and direct marketing — the ICO's most frequent fining route.",
+    obligations: [
+      "Take consent before setting non-essential cookies",
+      "Apply the soft opt-in narrowly for email marketing",
+      "Keep consent evidence and suppression lists",
+    ],
+    link: "https://www.legislation.gov.uk/uksi/2003/2426/contents",
+    why: ["United Kingdom", "electronic marketing or cookies"],
+    trigger: (i) => i.t("uk") && (i.sec("saas") || i.sec("ecommerce") || i.sec("platform")),
+  },
+  {
+    id: "uknis", code: "UK", tier: "conditional", cat: "security",
+    title: "Network and Information Systems Regulations 2018",
+    body: "Sector competent authorities · ICO for RDSPs",
+    what: "UK security duties for operators of essential services and digital service providers.",
+    obligations: [
+      "Determine operator of essential services vs relevant digital service provider status",
+      "Meet the NCSC Cyber Assessment Framework outcomes",
+      "Report incidents to the competent authority within 72 hours",
+    ],
+    link: "https://www.legislation.gov.uk/uksi/2018/506/contents",
+    why: ["United Kingdom", "essential service or digital service provider"],
+    trigger: (i) => i.t("uk") && (i.sec("ci") || i.sec("saas") || i.sec("public")),
+  },
+  {
+    id: "osa", code: "UK", tier: "mandatory", cat: "sector",
+    title: "Online Safety Act 2023",
+    body: "Ofcom",
+    what: "Duties for user-to-user and search services with UK links.",
+    obligations: [
+      "Complete illegal content and children's access risk assessments",
+      "Implement proportionate safety measures under the Ofcom codes",
+      "Maintain reporting and complaints mechanisms",
+    ],
+    link: "https://www.legislation.gov.uk/ukpga/2023/50/contents",
+    why: ["United Kingdom", "platform or marketplace"],
+    trigger: (i) => i.t("uk") && i.sec("platform"),
+  },
+  {
+    id: "ce", code: "UK", tier: "conditional", cat: "standard",
+    title: "Cyber Essentials / Cyber Essentials Plus",
+    body: "NCSC · IASME",
+    what: "A procurement precondition for most UK central government contracts.",
+    obligations: [
+      "Certify against the five technical controls annually",
+      "Take Plus where the contract requires independent verification",
+    ],
+    link: "https://www.ncsc.gov.uk/cyberessentials/overview",
+    why: ["United Kingdom", "public sector or defence supply"],
+    trigger: (i) => i.t("uk") && (i.sec("public") || i.sec("defense")),
+  },
+  {
+    id: "icoai", code: "UK", tier: "guidance", cat: "ai",
+    title: "ICO guidance on AI and data protection",
+    body: "Information Commissioner's Office",
+    what: "The UK's operative AI expectations, absent a dedicated AI statute.",
+    obligations: [
+      "Run a DPIA for AI processing and document fairness testing",
+      "Apply the ICO/Alan Turing Institute explainability guidance to automated decisions",
+      "Watch the sector regulators' AI principles rather than a single AI law",
+    ],
+    link: "https://ico.org.uk/for-organisations/uk-gdpr-guidance-and-resources/artificial-intelligence/",
+    why: ["United Kingdom", "AI in scope"],
+    trigger: (i) => i.t("uk") && i.ai !== "none",
+  },
+
+  /* ---------- Switzerland ---------- */
+  {
+    id: "fadp", code: "CH", tier: "mandatory", cat: "privacy",
+    title: "Federal Act on Data Protection (revFADP / nDSG)",
+    body: "Federal Data Protection and Information Commissioner",
+    what: "In force since September 2023 — GDPR-adjacent, with real differences.",
+    obligations: [
+      "Keep a register of processing activities (SME exemption is narrow)",
+      "Run a data protection impact assessment for high-risk processing",
+      "Report breaches to the FDPIC as soon as possible — no fixed 72-hour clock",
+      "Appoint a Swiss representative if you are a foreign controller targeting Switzerland",
+      "Note that sanctions fall on responsible natural persons, not the company",
+    ],
+    link: "https://www.fedlex.admin.ch/eli/cc/2022/491/en",
+    why: ["Switzerland", "personal data"],
+    trigger: (i) => i.t("ch") && i.pii,
+  },
+  {
+    id: "finma", code: "CH", tier: "conditional", cat: "sector",
+    title: "FINMA Circular 2023/1 — Operational risks and resilience",
+    body: "Swiss Financial Market Supervisory Authority",
+    what: "Operational resilience and ICT risk expectations for supervised institutions.",
+    obligations: [
+      "Identify critical functions and set tolerances for disruption",
+      "Manage ICT, cyber and third-party risk under board oversight",
+      "Report cyber attacks to FINMA within the prescribed deadline",
+    ],
+    link: "https://www.finma.ch/en/documentation/circulars/",
+    why: ["Switzerland", "financial institution"],
+    trigger: (i) => i.t("ch") && (i.sec("finance") || i.sec("insurance")),
+  },
+
+  /* ---------- US federal ---------- */
+  {
+    id: "ftc5", code: "US", tier: "mandatory", cat: "privacy",
+    title: "FTC Act §5 — unfair or deceptive acts or practices",
+    body: "Federal Trade Commission",
+    what: "The de facto US federal privacy and security enforcement hook.",
+    obligations: [
+      "Keep privacy and security claims accurate — a false claim is the violation",
+      "Maintain security reasonable for the sensitivity of the data",
+      "Expect consent orders to run for twenty years",
+    ],
+    link: "https://www.ftc.gov/legal-library/browse/statutes/federal-trade-commission-act",
+    why: ["United States", "commercial activity"],
+    trigger: (i) => i.us,
+  },
+  {
+    id: "breach", code: "US", tier: "mandatory", cat: "privacy",
+    title: "State data breach notification statutes (all 50 states)",
+    body: "State attorneys general",
+    what: "Fifty separate clocks and definitions — the operative US breach law.",
+    obligations: [
+      "Map notification triggers and deadlines for every state where you hold residents' data",
+      "Build a single response process that satisfies the strictest applicable clock",
+      "Track attorney general and credit bureau notification thresholds",
+    ],
+    link: "https://www.ncsl.org/technology-and-communication/security-breach-notification-laws",
+    why: ["United States", "personal data"],
+    trigger: (i) => i.us && i.pii,
+  },
+  {
+    id: "hipaa", code: "US", tier: "mandatory", cat: "sector",
+    title: "HIPAA Privacy, Security and Breach Notification Rules",
+    body: "HHS Office for Civil Rights",
+    what: "Applies to covered entities and business associates handling PHI.",
+    obligations: [
+      "Confirm covered entity or business associate status before anything else",
+      "Complete and maintain the Security Rule risk analysis",
+      "Execute business associate agreements down the chain",
+      "Notify individuals within 60 days; HHS timing depends on the number affected",
+    ],
+    link: "https://www.hhs.gov/hipaa/index.html",
+    why: ["United States", "healthcare"],
+    trigger: (i) => i.us && i.sec("health"),
+  },
+  {
+    id: "mhmd", code: "US", tier: "conditional", cat: "privacy",
+    title: "Consumer health data laws (WA My Health My Data, NV SB 370)",
+    body: "State attorneys general · private right of action (WA)",
+    what: "Catches health-adjacent data that HIPAA never touches — apps, wearables, ad tech.",
+    obligations: [
+      "Separate consent for collection and a distinct consent for sharing",
+      "Written authorization before any sale of consumer health data",
+      "Publish a standalone consumer health data privacy policy",
+    ],
+    link: "https://www.atg.wa.gov/my-health-my-data-act",
+    why: ["United States", "health-related data"],
+    trigger: (i) => i.us && i.health,
+  },
+  {
+    id: "glba", code: "US", tier: "mandatory", cat: "sector",
+    title: "GLBA Safeguards Rule (16 CFR Part 314)",
+    body: "Federal Trade Commission",
+    what: "Prescriptive security programme for financial institutions, broadly defined.",
+    obligations: [
+      "Designate a qualified individual to run the information security programme",
+      "Perform written risk assessment, encryption, MFA and continuous monitoring",
+      "Notify the FTC of security events affecting 500+ consumers",
+    ],
+    link: "https://www.ftc.gov/business-guidance/resources/ftc-safeguards-rule-what-your-business-needs-know",
+    why: ["United States", "financial or insurance activity"],
+    trigger: (i) => i.us && (i.sec("finance") || i.sec("insurance")),
+  },
+  {
+    id: "coppa", code: "US", tier: "mandatory", cat: "privacy",
+    title: "COPPA Rule (16 CFR Part 312)",
+    body: "Federal Trade Commission",
+    what: "Verifiable parental consent for under-13s — amended rule effective 2025.",
+    obligations: [
+      "Obtain verifiable parental consent before collection",
+      "Publish a direct notice and honour deletion requests",
+      "Apply the separate consent requirement for disclosure to third parties",
+    ],
+    link: "https://www.ftc.gov/legal-library/browse/rules/childrens-online-privacy-protection-rule-coppa",
+    why: ["United States", "children's data"],
+    trigger: (i) => i.us && i.children,
+  },
+  {
+    id: "ferpa", code: "US", tier: "mandatory", cat: "sector",
+    title: "FERPA — Family Educational Rights and Privacy Act",
+    body: "US Department of Education",
+    what: "Education records held by institutions receiving federal funding.",
+    obligations: [
+      "Control disclosure of personally identifiable information from education records",
+      "Use the school official exception properly for vendors",
+      "Honour inspection and amendment rights",
+    ],
+    link: "https://studentprivacy.ed.gov/",
+    why: ["United States", "education"],
+    trigger: (i) => i.us && i.sec("education"),
+  },
+  {
+    id: "seccyber", code: "US", tier: "mandatory", cat: "sector",
+    title: "SEC cybersecurity disclosure rules (Item 1.05 / Item 106)",
+    body: "Securities and Exchange Commission",
+    what: "Material incident disclosure within four business days.",
+    obligations: [
+      "Define a materiality determination process that runs without unreasonable delay",
+      "File Form 8-K Item 1.05 within four business days of determining materiality",
+      "Route voluntary or immaterial incident disclosures to Item 8.01, per the 2024 Corp Fin guidance",
+      "Describe risk management, strategy and governance annually in Item 106",
+    ],
+    link: "https://www.sec.gov/rules/final/2023/33-11216.pdf",
+    why: ["United States", "listed issuer"],
+    trigger: (i) => i.us && i.listed,
+  },
+  {
+    id: "sox", code: "US", tier: "mandatory", cat: "sector",
+    title: "Sarbanes-Oxley Act §§ 302 and 404",
+    body: "SEC · PCAOB · external auditor",
+    what: "The control regime behind most US public-company IT compliance. Cyber disclosure sits on top of it, not instead of it.",
+    obligations: [
+      "Scope the IT general controls supporting financial reporting: access, change management, operations, and program development",
+      "Have the CEO and CFO certify disclosure controls each quarter under § 302",
+      "Assess and report on internal control over financial reporting annually under § 404(a); accelerated filers add the § 404(b) auditor attestation",
+      "Evidence controls over any third-party or cloud system in the financial reporting path, typically through SOC 1 reports",
+      "Note that a material weakness is disclosable and moves the share price — this is the highest-visibility control failure on the register",
+    ],
+    link: "https://pcaobus.org/oversight/standards/auditing-standards",
+    why: ["United States", "listed issuer"],
+    trigger: (i) => i.us && i.listed,
+  },
+  {
+    id: "finra", code: "US", tier: "mandatory", cat: "sector",
+    title: "FINRA Rule 4511, SEA Rule 17a-4 and Regulation S-P",
+    body: "FINRA · Securities and Exchange Commission",
+    what: "Broker-dealer recordkeeping, retention and customer data duties, distinct from GLBA and NYDFS.",
+    obligations: [
+      "Retain required books and records for the prescribed periods, with the first two years readily accessible",
+      "Preserve records in a non-rewriteable, non-erasable format or under the audit-trail alternative, and file the required undertaking",
+      "Capture and supervise all business communications, including messaging apps and personal devices — off-channel communications have drawn very large penalties",
+      "Meet the amended Regulation S-P incident response programme and notify affected customers within 30 days of determining unauthorised access",
+    ],
+    link: "https://www.finra.org/rules-guidance/rulebooks/finra-rules",
+    why: ["United States", "banking or payments"],
+    trigger: (i) => i.us && i.sec("finance"),
+  },
+  {
+    id: "cmmc", code: "US", tier: "mandatory", cat: "sector",
+    title: "CMMC 2.0 & NIST SP 800-171 Rev. 3",
+    body: "DoD CIO · Defense Contract Management Agency",
+    what: "Certification gate for defence contracts touching controlled unclassified information.",
+    obligations: [
+      "Determine the required CMMC level from the contract clause",
+      "Implement NIST SP 800-171 controls and maintain the SPRS score",
+      "Flow requirements down to subcontractors",
+    ],
+    link: "https://dodcio.defense.gov/CMMC/",
+    why: ["United States", "defence or government supply"],
+    trigger: (i) => i.us && i.sec("defense"),
+  },
+  {
+    id: "fedramp", code: "US", tier: "conditional", cat: "sector",
+    title: "FedRAMP authorization",
+    body: "GSA FedRAMP PMO",
+    what: "Required to sell cloud services to US federal agencies.",
+    obligations: [
+      "Select an authorization path and impact level",
+      "Implement the NIST SP 800-53 baseline and maintain continuous monitoring",
+    ],
+    link: "https://www.fedramp.gov/",
+    why: ["United States", "cloud service", "public sector"],
+    trigger: (i) => i.us && i.sec("saas") && (i.sec("public") || i.sec("defense")),
+  },
+  {
+    id: "eeoc", code: "US", tier: "mandatory", cat: "ai",
+    title: "Title VII / ADA / ADEA as applied to algorithmic decisions",
+    body: "EEOC · Department of Justice",
+    what: "Anti-discrimination law binds automated decisions with no AI statute required.",
+    obligations: [
+      "Test selection procedures for adverse impact under the Uniform Guidelines",
+      "Provide reasonable accommodation in algorithmic assessment",
+      "Retain vendor validation evidence — liability does not transfer to the vendor",
+    ],
+    link: "https://www.eeoc.gov/laws/guidance/select-issues-assessing-adverse-impact-software-algorithms-and-artificial",
+    why: ["United States", "AI in consequential decisions"],
+    trigger: (i) => i.us && i.ai === "deployer",
+  },
+
+  /* ---------- US states ---------- */
+  {
+    id: "ccpa", code: "US·CA", tier: "mandatory", cat: "privacy",
+    title: "CCPA as amended by the CPRA",
+    body: "California Privacy Protection Agency · California AG",
+    what: "The most demanding US state privacy regime, with a dedicated regulator.",
+    obligations: [
+      "Confirm the business thresholds — revenue, 100k consumers, or 50% data revenue",
+      "Honour opt-out of sale/sharing, including Global Privacy Control signals",
+      "Run risk assessments and cybersecurity audits under the 2025 regulations",
+      "Apply the limitation right for sensitive personal information",
+    ],
+    link: "https://cppa.ca.gov/regulations/",
+    why: ["California", "personal data"],
+    trigger: (i) => i.t("us-ca") && i.pii,
+  },
+  {
+    id: "admt", code: "US·CA", tier: "conditional", cat: "ai",
+    title: "CPPA regulations on automated decision-making technology",
+    body: "California Privacy Protection Agency",
+    what: "Finalised regulations, effective 1 January 2026, with consumer ADMT rights from 1 January 2027.",
+    obligations: [
+      "Issue pre-use notice describing the ADMT and its logic",
+      "Offer opt-out and a right to access ADMT outputs; these rights bite from 1 January 2027",
+      "Complete the risk assessment before deploying",
+      "Cybersecurity audit certifications phase in by revenue: 2028 above $100m, 2029 for $50-100m, 2030 below $50m",
+    ],
+    link: "https://cppa.ca.gov/regulations/",
+    why: ["California", "AI in consequential decisions"],
+    trigger: (i) => i.t("us-ca") && (i.ai === "deployer" || i.ai === "developer"),
+  },
+  {
+    id: "sb942", code: "US·CA", tier: "conditional", cat: "ai",
+    title: "California AI Transparency Act (SB 942, as amended by AB 853)",
+    body: "California Attorney General",
+    what: "In effect since 2 August 2026, delayed from 1 January 2026 by AB 853.",
+    obligations: [
+      "Provide latent and manifest disclosures in generated content",
+      "Offer a free public detection tool",
+      "Further platform, GenAI-hosting and capture-device duties phase in from 1 January 2027",
+      "Watch SB 1000, still pending, which may remove the one-million-monthly-user threshold",
+    ],
+    link: "https://leginfo.legislature.ca.gov/faces/billNavClient.xhtml?bill_id=202320240SB942",
+    why: ["California", "public-facing generative AI"],
+    trigger: (i) => i.t("us-ca") && i.genai,
+  },
+  {
+    id: "ab2013", code: "US·CA", tier: "conditional", cat: "ai",
+    title: "California AB 2013 — generative AI training data transparency",
+    body: "California Attorney General",
+    what: "Public documentation of training datasets for generative systems.",
+    obligations: [
+      "Publish a high-level summary of datasets used in development",
+      "Disclose whether personal information or copyrighted material was included",
+      "Cover systems released or substantially modified since January 2022",
+    ],
+    link: "https://leginfo.legislature.ca.gov/faces/billNavClient.xhtml?bill_id=202320240AB2013",
+    why: ["California", "AI development"],
+    trigger: (i) => i.t("us-ca") && (i.ai === "developer" || i.ai === "gpai"),
+  },
+  {
+    id: "cpa", code: "US·CO", tier: "mandatory", cat: "privacy",
+    title: "Colorado Privacy Act",
+    body: "Colorado Attorney General",
+    what: "Opt-out regime with universal opt-out mechanism recognition.",
+    obligations: [
+      "Recognise universal opt-out mechanisms from the state list",
+      "Obtain consent for sensitive data processing",
+      "Complete data protection assessments for targeted advertising, sale and profiling",
+    ],
+    link: "https://coag.gov/resources/colorado-privacy-act/",
+    why: ["Colorado", "personal data"],
+    trigger: (i) => i.t("us-co") && i.pii,
+  },
+  {
+    id: "coai", code: "US·CO", tier: "conditional", cat: "ai",
+    title: "Colorado Automated Decision-Making Technology Act (SB 26-189)",
+    body: "Colorado Attorney General",
+    what: "Repealed and replaced the 2024 Colorado AI Act before it ever took effect. Notice-based, not duty-of-care based.",
+    obligations: [
+      "Note that SB 24-205 is gone: the duty of care, mandatory risk management programme and annual impact assessments were all removed",
+      "Give consumers pre-use notice where ADMT materially influences a consequential decision",
+      "Explain adverse outcomes within 30 days and offer meaningful human review",
+      "Developers: supply the documentation deployers need to meet their duties",
+      "Effective 1 January 2027, with enforcement contingent on Attorney General rulemaking; litigation over the framework is ongoing",
+    ],
+    link: "https://leg.colorado.gov/bills/sb26-189",
+    why: ["Colorado", "AI in consequential decisions"],
+    trigger: (i) => i.t("us-co") && (i.ai === "deployer" || i.ai === "developer"),
+  },
+  {
+    id: "vcdpa", code: "US·VA", tier: "mandatory", cat: "privacy",
+    title: "Virginia Consumer Data Protection Act",
+    body: "Virginia Attorney General",
+    what: "Consent for sensitive data; no general private right of action.",
+    obligations: [
+      "Obtain opt-in consent for sensitive data",
+      "Run data protection assessments for higher-risk processing",
+      "Provide appeal rights for denied consumer requests",
+    ],
+    link: "https://law.lis.virginia.gov/vacodefull/title59.1/chapter53/",
+    why: ["Virginia", "personal data"],
+    trigger: (i) => i.t("us-va") && i.pii,
+  },
+  {
+    id: "ctdpa", code: "US·CT", tier: "mandatory", cat: "privacy",
+    title: "Connecticut Data Privacy Act",
+    body: "Connecticut Attorney General",
+    what: "Opt-out regime with expanding minors' protections.",
+    obligations: [
+      "Recognise universal opt-out signals",
+      "Apply the heightened duties for minors' data and social media features",
+      "Complete data protection assessments",
+    ],
+    link: "https://portal.ct.gov/ag/sections/privacy/the-connecticut-data-privacy-act",
+    why: ["Connecticut", "personal data"],
+    trigger: (i) => i.t("us-ct") && i.pii,
+  },
+  {
+    id: "tdpsa", code: "US·TX", tier: "mandatory", cat: "privacy",
+    title: "Texas Data Privacy and Security Act",
+    body: "Texas Attorney General",
+    what: "No revenue threshold — small business status is the main exemption.",
+    obligations: [
+      "Post the prescribed sale-of-sensitive-data notice verbatim if applicable",
+      "Honour opt-outs including universal mechanisms",
+      "Complete data protection assessments",
+    ],
+    link: "https://www.texasattorneygeneral.gov/consumer-protection/privacy-and-identity-theft",
+    why: ["Texas", "personal data"],
+    trigger: (i) => i.t("us-tx") && i.pii,
+  },
+  {
+    id: "traiga", code: "US·TX", tier: "conditional", cat: "ai",
+    title: "Texas Responsible AI Governance Act (HB 149)",
+    body: "Texas Attorney General",
+    what: "In force since 1 January 2026. Intent-based prohibitions rather than a risk-tier model, and it preempts local AI ordinances.",
+    obligations: [
+      "Avoid the prohibited uses — behavioural manipulation, discrimination by intent, social scoring",
+      "Meet government-entity disclosure duties where applicable",
+      "Consider the regulatory sandbox and the 60-day cure period",
+    ],
+    link: "https://capitol.texas.gov/BillLookup/History.aspx?LegSess=89R&Bill=HB149",
+    why: ["Texas", "AI in scope"],
+    trigger: (i) => i.t("us-tx") && i.ai !== "none",
+  },
+  {
+    id: "nydfs", code: "US·NY", tier: "mandatory", cat: "sector",
+    title: "NYDFS Cybersecurity Regulation (23 NYCRR Part 500)",
+    body: "New York Department of Financial Services",
+    what: "Prescriptive, audited, and amended in 2023 with staged deadlines.",
+    obligations: [
+      "File the annual certification of material compliance signed by the CEO and CISO",
+      "Implement MFA across all remote and privileged access",
+      "Report cybersecurity events within 72 hours and ransom payments within 24 hours",
+      "Maintain asset inventory, annual penetration testing and independent audit where Class A",
+    ],
+    link: "https://www.dfs.ny.gov/industry_guidance/cybersecurity",
+    why: ["New York", "financial or insurance activity"],
+    trigger: (i) => i.t("us-ny") && (i.sec("finance") || i.sec("insurance")),
+  },
+  {
+    id: "shield", code: "US·NY", tier: "mandatory", cat: "security",
+    title: "New York SHIELD Act",
+    body: "New York Attorney General",
+    what: "Reasonable safeguards duty for anyone holding New York residents' private information.",
+    obligations: [
+      "Implement administrative, technical and physical safeguards",
+      "Designate a security programme coordinator",
+      "Notify affected residents and state regulators on discovery",
+    ],
+    link: "https://ag.ny.gov/resources/organizations/data-breach-reporting",
+    why: ["New York", "personal data"],
+    trigger: (i) => i.t("us-ny") && i.pii,
+  },
+  {
+    id: "bipa", code: "US·IL", tier: "mandatory", cat: "privacy",
+    title: "Illinois Biometric Information Privacy Act",
+    body: "Private right of action",
+    what: "The highest-litigation-risk US privacy statute — damages per violation, no harm needed.",
+    obligations: [
+      "Obtain written release before collecting biometric identifiers",
+      "Publish a retention and destruction schedule",
+      "Never sell or profit from biometric data",
+    ],
+    link: "https://www.ilga.gov/legislation/ilcs/ilcs3.asp?ActID=3004",
+    why: ["Illinois", "biometric or special category data"],
+    trigger: (i) => i.t("us-il") && i.special,
+  },
+
+  /* ---------- UAE ---------- */
+  {
+    id: "aepdpl", code: "AE", tier: "mandatory", cat: "privacy",
+    title: "Federal Decree-Law No. 45 of 2021 (UAE PDPL)",
+    body: "UAE Data Office",
+    what: "The onshore federal regime — confirm the current status of the executive regulations.",
+    obligations: [
+      "Establish a lawful basis and maintain records of processing",
+      "Notify the Data Office and data subjects of breaches without undue delay",
+      "Appoint a DPO where the risk, volume or sensitivity tests are met",
+      "Apply the cross-border transfer conditions on adequacy or appropriate safeguards",
+    ],
+    link: "https://u.ae/en/about-the-uae/digital-uae/data/data-protection-laws",
+    why: ["UAE onshore", "personal data"],
+    trigger: (i) => i.t("ae") && i.pii,
+  },
+  {
+    id: "aecyber", code: "AE", tier: "mandatory", cat: "security",
+    title: "Federal Decree-Law No. 34 of 2021 on Combatting Rumours and Cybercrimes",
+    body: "UAE Public Prosecution",
+    what: "Criminal exposure sitting behind data handling and content decisions.",
+    obligations: [
+      "Restrict unauthorised access, interception and disclosure",
+      "Align content moderation and disclosure practices with the offences",
+    ],
+    link: "https://u.ae/en/information-and-services/justice-safety-and-the-law/cyber-safety-and-digital-security",
+    why: ["UAE onshore"],
+    trigger: (i) => i.t("ae"),
+  },
+  {
+    id: "ias", code: "AE", tier: "conditional", cat: "security",
+    title: "UAE Information Assurance Standards (IAS v2)",
+    body: "UAE Cybersecurity Council",
+    what: "The federal control catalogue for entities in critical sectors.",
+    obligations: [
+      "Determine the applicable priority tier — P1 to P4",
+      "Implement the 188 controls across management and technical families",
+      "Evidence compliance through the sector regulator's assurance cycle",
+    ],
+    link: "https://csc.gov.ae/",
+    why: ["UAE onshore", "critical or public sector"],
+    trigger: (i) => i.t("ae") && (i.sec("ci") || i.sec("public") || i.sec("finance")),
+  },
+  {
+    id: "desc", code: "AE", tier: "conditional", cat: "security",
+    title: "Dubai Information Security Regulation (DESC ISR v2)",
+    body: "Dubai Electronic Security Center",
+    what: "The Dubai emirate-level standard, with certification for government-connected entities.",
+    obligations: [
+      "Scope against the ISR applicability criteria for Dubai government and its suppliers",
+      "Implement the control set and obtain ISR certification where required",
+      "Coordinate incident reporting with DESC",
+    ],
+    link: "https://www.desc.gov.ae/",
+    why: ["UAE onshore", "public sector, critical infrastructure or supplier"],
+    trigger: (i) => i.t("ae") && (i.sec("public") || i.sec("ci") || i.sec("saas")),
+  },
+  {
+    id: "adhics", code: "AE", tier: "mandatory", cat: "sector",
+    title: "ADHICS v2 — Abu Dhabi Healthcare Information and Cyber Security Standard",
+    body: "Department of Health – Abu Dhabi",
+    what: "Mandatory for Abu Dhabi healthcare entities and their service providers.",
+    obligations: [
+      "Classify the entity and apply the corresponding control tier",
+      "Meet the health information exchange and Malaffi integration requirements",
+      "Submit the compliance self-assessment on the DoH cycle",
+    ],
+    link: "https://www.doh.gov.ae/en/resources",
+    why: ["UAE onshore", "healthcare"],
+    trigger: (i) => i.t("ae") && i.sec("health"),
+  },
+  {
+    id: "cbuae", code: "AE", tier: "mandatory", cat: "sector",
+    title: "CBUAE regulations — information security & outsourcing",
+    body: "Central Bank of the UAE",
+    what: "Licensed financial institution duties on technology risk and outsourcing.",
+    obligations: [
+      "Meet the information security and business continuity standards",
+      "Obtain approval for material outsourcing and maintain the register",
+      "Report significant incidents to the Central Bank",
+    ],
+    link: "https://www.centralbank.ae/en/cbuae-rulebook/",
+    why: ["UAE onshore", "financial or insurance activity"],
+    trigger: (i) => i.t("ae") && (i.sec("finance") || i.sec("insurance")),
+  },
+  {
+    id: "uaeai", code: "AE", tier: "guidance", cat: "ai",
+    title: "UAE National AI Strategy 2031 & AI Ethics Principles",
+    body: "Office of the Minister of State for AI",
+    what: "Policy expectations rather than binding rules — but they drive public sector procurement.",
+    obligations: [
+      "Align governance to the UAE Charter for the Development and Use of AI",
+      "Expect ethics evidence in government tender responses",
+    ],
+    link: "https://ai.gov.ae/",
+    why: ["UAE onshore", "AI in scope"],
+    trigger: (i) => i.t("ae") && i.ai !== "none",
+  },
+  {
+    id: "difcdp", code: "DIFC", tier: "mandatory", cat: "privacy",
+    title: "DIFC Data Protection Law No. 5 of 2020",
+    body: "DIFC Commissioner of Data Protection",
+    what: "A separate common-law jurisdiction — onshore PDPL does not apply here.",
+    obligations: [
+      "File the annual notification with the Commissioner",
+      "Notify the Commissioner of breaches without undue delay",
+      "Apply the Art. 26–28 transfer conditions",
+    ],
+    link: "https://www.difc.com/business/laws-and-regulations",
+    why: ["DIFC", "personal data"],
+    trigger: (i) => i.t("difc") && i.pii,
+  },
+  {
+    id: "difcreg10", code: "DIFC", tier: "mandatory", cat: "ai",
+    title: "DIFC Regulation 10 — autonomous and semi-autonomous systems",
+    body: "DIFC Commissioner of Data Protection",
+    what: "A binding, operational AI accountability rule — rare, and easy to miss.",
+    obligations: [
+      "Register as an operator of autonomous or semi-autonomous systems",
+      "Apply the prescribed ethical principles across the lifecycle",
+      "Maintain human oversight and accountability documentation",
+    ],
+    link: "https://www.difc.com/business/laws-and-regulations",
+    why: ["DIFC", "AI in scope"],
+    trigger: (i) => i.t("difc") && i.ai !== "none",
+  },
+  {
+    id: "adgmdp", code: "ADGM", tier: "mandatory", cat: "privacy",
+    title: "ADGM Data Protection Regulations 2021",
+    body: "ADGM Office of Data Protection",
+    what: "Abu Dhabi Global Market's own regime, again separate from onshore.",
+    obligations: [
+      "Register with the Office of Data Protection and renew annually",
+      "Maintain records and run DPIAs for high-risk processing",
+      "Report personal data breaches without undue delay",
+    ],
+    link: "https://www.adgm.com/office-of-data-protection",
+    why: ["ADGM", "personal data"],
+    trigger: (i) => i.t("adgm") && i.pii,
+  },
+
+  /* ---------- Saudi Arabia ---------- */
+  {
+    id: "sapdpl", code: "SA", tier: "mandatory", cat: "privacy",
+    title: "Saudi Personal Data Protection Law & Implementing Regulations",
+    body: "SDAIA",
+    what: "Enforced since September 2024, with a national registration platform.",
+    obligations: [
+      "Register on the SDAIA national data controller platform",
+      "Appoint a personal data protection officer where the criteria are met",
+      "Meet the transfer regulation conditions and complete the risk assessment",
+      "Notify SDAIA of breaches within 72 hours",
+    ],
+    link: "https://sdaia.gov.sa/en/SDAIA/about/Pages/PersonalDataProtection.aspx",
+    why: ["Saudi Arabia", "personal data"],
+    trigger: (i) => i.t("sa") && i.pii,
+  },
+  {
+    id: "ecc", code: "SA", tier: "conditional", cat: "security",
+    title: "NCA Essential Cybersecurity Controls (ECC-2:2024)",
+    body: "National Cybersecurity Authority",
+    what: "Mandatory for government entities, critical infrastructure and their suppliers.",
+    obligations: [
+      "Assess against the 108 controls of ECC-2:2024 and record the compliance level",
+      "Check NCNICC-1:2025, which extended baseline controls more widely across the private sector",
+      "Meet the sector-specific overlays where they apply",
+      "Report through the NCA compliance mechanism",
+    ],
+    link: "https://nca.gov.sa/en/regulatory-documents/",
+    why: ["Saudi Arabia", "public sector or critical infrastructure"],
+    trigger: (i) => i.t("sa") && (i.sec("public") || i.sec("ci") || i.sec("defense")),
+  },
+  {
+    id: "ccc", code: "SA", tier: "conditional", cat: "security",
+    title: "NCA Cloud Cybersecurity Controls (CCC-1:2020)",
+    body: "National Cybersecurity Authority",
+    what: "Splits obligations between cloud service providers and tenants.",
+    obligations: [
+      "Identify your role — CSP or CST — and the classification level",
+      "Implement the controls for that role and level",
+    ],
+    link: "https://nca.gov.sa/en/regulatory-documents/",
+    why: ["Saudi Arabia", "cloud service"],
+    trigger: (i) => i.t("sa") && i.sec("saas"),
+  },
+  {
+    id: "sama", code: "SA", tier: "mandatory", cat: "sector",
+    title: "SAMA Cyber Security Framework",
+    body: "Saudi Central Bank",
+    what: "Maturity-rated framework with periodic self-assessment against SAMA.",
+    obligations: [
+      "Reach the target maturity level across the four framework domains",
+      "Submit the self-assessment tool results on the SAMA cycle",
+      "Meet the outsourcing and cloud computing rules",
+    ],
+    link: "https://www.sama.gov.sa/en-US/RulesInstructions/Pages/default.aspx",
+    why: ["Saudi Arabia", "financial or insurance activity"],
+    trigger: (i) => i.t("sa") && (i.sec("finance") || i.sec("insurance")),
+  },
+  {
+    id: "sdaiaai", code: "SA", tier: "guidance", cat: "ai",
+    title: "SDAIA AI Ethics Principles & Generative AI Guidelines",
+    body: "SDAIA",
+    what: "Non-binding, but the reference point for public sector AI procurement.",
+    obligations: [
+      "Map your governance to the SDAIA principles",
+      "Follow the generative AI guidelines for government and public use",
+    ],
+    link: "https://sdaia.gov.sa/en/SDAIA/about/Pages/AIEthics.aspx",
+    why: ["Saudi Arabia", "AI in scope"],
+    trigger: (i) => i.t("sa") && i.ai !== "none",
+  },
+
+  /* ---------- Other Gulf ---------- */
+  {
+    id: "qapdppl", code: "QA", tier: "mandatory", cat: "privacy",
+    title: "Qatar Law No. 13 of 2016 on Personal Data Privacy Protection",
+    body: "National Cyber Security Agency / Compliance Department",
+    what: "The first Gulf comprehensive privacy law; guidance sits with the NCSA.",
+    obligations: [
+      "Notify the competent department for processing of data of a special nature",
+      "Implement the prescribed privacy management framework",
+      "Report breaches to the department and affected individuals",
+    ],
+    link: "https://www.ncsa.gov.qa/en",
+    why: ["Qatar", "personal data"],
+    trigger: (i) => i.t("qa") && i.pii,
+  },
+  {
+    id: "bhpdpl", code: "BH", tier: "mandatory", cat: "privacy",
+    title: "Bahrain Personal Data Protection Law No. 30 of 2018",
+    body: "Personal Data Protection Authority",
+    what: "Includes criminal penalties — unusual among Gulf privacy laws.",
+    obligations: [
+      "Register or notify processing where required and appoint a data protection guardian",
+      "Obtain prior authorisation for sensitive processing categories",
+      "Apply transfer restrictions to non-approved jurisdictions",
+    ],
+    link: "https://www.legalaffairs.gov.bh/",
+    why: ["Bahrain", "personal data"],
+    trigger: (i) => i.t("bh") && i.pii,
+  },
+  {
+    id: "ompdpl", code: "OM", tier: "mandatory", cat: "privacy",
+    title: "Oman Personal Data Protection Law (Royal Decree 6/2022)",
+    body: "Ministry of Transport, Communications and Information Technology",
+    what: "In force since February 2023, with executive regulations issued in 2024.",
+    obligations: [
+      "Obtain a permit for processing sensitive personal data",
+      "Meet the written consent requirement and the transfer conditions",
+      "Notify the Ministry and data subjects of breaches",
+    ],
+    link: "https://www.mtcit.gov.om/",
+    why: ["Oman", "personal data"],
+    trigger: (i) => i.t("om") && i.pii,
+  },
+  {
+    id: "kwdppr", code: "KW", tier: "mandatory", cat: "privacy",
+    title: "Kuwait Data Privacy Protection Regulation (CITRA Resolution 26/2024)",
+    body: "Communication and Information Technology Regulatory Authority",
+    what: "Regulation rather than statute — telecom-sector-anchored but broadly applied.",
+    obligations: [
+      "Publish a privacy policy meeting the CITRA content requirements",
+      "Keep personal data within Kuwait unless the transfer conditions are met",
+      "Report breaches to CITRA",
+    ],
+    link: "https://citra.gov.kw/sites/en/Pages/default.aspx",
+    why: ["Kuwait", "personal data"],
+    trigger: (i) => i.t("kw") && i.pii,
+  },
+
+  /* ---------- Türkiye ---------- */
+  {
+    id: "kvkk", code: "TR", tier: "mandatory", cat: "privacy",
+    title: "KVKK — Law No. 6698 on the Protection of Personal Data",
+    body: "Kişisel Verileri Koruma Kurumu",
+    what: "Amended in 2024 — special category and transfer rules changed materially.",
+    obligations: [
+      "Register with VERBİS unless an exemption applies",
+      "Prepare the aydınlatma metni and, where needed, açık rıza metni",
+      "Maintain the personal data retention and disposal policy with periodic destruction",
+      "Notify the Board within 72 hours of a breach",
+      "Use the standard contract, BCR or explicit consent route for transfers abroad",
+    ],
+    link: "https://www.kvkk.gov.tr/",
+    why: ["Türkiye", "personal data"],
+    trigger: (i) => i.t("tr") && i.pii,
+  },
+  {
+    id: "bigr", code: "TR", tier: "conditional", cat: "security",
+    title: "Bilgi ve İletişim Güvenliği Rehberi (Presidential Circular 2019/12)",
+    body: "Digital Transformation Office of the Presidency",
+    what: "Binding on public institutions and critical infrastructure operators.",
+    obligations: [
+      "Classify assets and determine the applicable security level",
+      "Implement the guide's controls and complete the audit cycle",
+      "Meet the domestic data localisation expectations for critical data",
+    ],
+    link: "https://www.cbddo.gov.tr/bilgi-ve-iletisim-guvenligi-rehberi/",
+    why: ["Türkiye", "public sector or critical infrastructure"],
+    trigger: (i) => i.t("tr") && (i.sec("public") || i.sec("ci")),
+  },
+  {
+    id: "bddk", code: "TR", tier: "mandatory", cat: "sector",
+    title: "BDDK Information Systems Management Regulation",
+    body: "Bankacılık Düzenleme ve Denetleme Kurumu",
+    what: "Information systems governance and audit for Turkish banks.",
+    obligations: [
+      "Meet the primary and secondary systems localisation requirement",
+      "Complete the annual independent information systems audit",
+      "Obtain approval for outsourcing of information systems services",
+    ],
+    link: "https://www.bddk.org.tr/Mevzuat",
+    why: ["Türkiye", "banking or payments"],
+    trigger: (i) => i.t("tr") && i.sec("finance"),
+  },
+  {
+    id: "etbis", code: "TR", tier: "mandatory", cat: "sector",
+    title: "Law No. 6563 on the Regulation of Electronic Commerce & ETBİS",
+    body: "Ministry of Trade",
+    what: "Registration and commercial communication rules for Turkish e-commerce.",
+    obligations: [
+      "Register with ETBİS and display the required information",
+      "Obtain prior consent for commercial electronic messages via İYS",
+      "Apply the intermediary service provider obligations by transaction volume band",
+    ],
+    link: "https://www.ticaret.gov.tr/",
+    why: ["Türkiye", "e-commerce"],
+    trigger: (i) => i.t("tr") && (i.sec("ecommerce") || i.sec("platform")),
+  },
+
+  /* ---------- Japan ---------- */
+  {
+    id: "appi", code: "JP", tier: "mandatory", cat: "privacy",
+    title: "Act on the Protection of Personal Information (APPI)",
+    body: "Personal Information Protection Commission",
+    what: "Purpose-specification led, with strict rules on third-party provision.",
+    obligations: [
+      "Specify and publicise the utilisation purpose before use",
+      "Obtain consent for third-party provision and keep the prescribed records",
+      "Report leakages to the PPC and notify individuals where the thresholds are met",
+      "Disclose the country and safeguards for transfers abroad",
+    ],
+    link: "https://www.ppc.go.jp/en/",
+    why: ["Japan", "personal data"],
+    trigger: (i) => i.t("jp") && i.pii,
+  },
+  {
+    id: "jpai", code: "JP", tier: "guidance", cat: "ai",
+    title: "AI Guidelines for Business (METI/MIC) & the AI Promotion Act",
+    body: "METI · MIC · Cabinet Office",
+    what: "Japan's soft-law approach — obligations are cooperative rather than punitive.",
+    obligations: [
+      "Adopt the guidelines' governance structure across developer, provider and user roles",
+      "Track the promotion act's cooperation duties and the government's basic plan",
+    ],
+    link: "https://www.meti.go.jp/english/policy/mono_info_service/information_economy/ai_guidelines.html",
+    why: ["Japan", "AI in scope"],
+    trigger: (i) => i.t("jp") && i.ai !== "none",
+  },
+  {
+    id: "fisc", code: "JP", tier: "conditional", cat: "sector",
+    title: "FISC Security Guidelines for financial institutions",
+    body: "Center for Financial Industry Information Systems",
+    what: "The de facto supervisory baseline for Japanese financial IT.",
+    obligations: [
+      "Map controls to the FISC standards and record deviations",
+      "Meet the cloud usage and third-party management expectations",
+    ],
+    link: "https://www.fisc.or.jp/english/",
+    why: ["Japan", "financial or insurance activity"],
+    trigger: (i) => i.t("jp") && (i.sec("finance") || i.sec("insurance")),
+  },
+
+  /* ---------- China ---------- */
+  {
+    id: "pipl", code: "CN", tier: "mandatory", cat: "privacy",
+    title: "Personal Information Protection Law (PIPL)",
+    body: "Cyberspace Administration of China",
+    what: "Consent-heavy, with separate consent required for many common activities.",
+    obligations: [
+      "Obtain separate consent for sensitive data, transfers abroad and public disclosure",
+      "Complete a personal information protection impact assessment and retain it three years",
+      "Appoint a domestic representative if processing from outside China",
+      "Conduct compliance audits under the 2025 audit measures",
+    ],
+    link: "https://www.cac.gov.cn/",
+    why: ["China", "personal data"],
+    trigger: (i) => i.t("cn") && i.pii,
+  },
+  {
+    id: "csl", code: "CN", tier: "mandatory", cat: "security",
+    title: "Cybersecurity Law & MLPS 2.0 (等级保护)",
+    body: "Ministry of Public Security · CAC",
+    what: "Network operators must grade their systems and be tested accordingly.",
+    obligations: [
+      "Determine the MLPS grade for each system and file it with the public security bureau",
+      "Pass the grading evaluation for level 2 and above",
+      "Retain network logs for at least six months",
+    ],
+    link: "https://www.cac.gov.cn/",
+    why: ["China", "network operations"],
+    trigger: (i) => i.t("cn"),
+  },
+  {
+    id: "dsl", code: "CN", tier: "mandatory", cat: "security",
+    title: "Data Security Law & Network Data Security Management Regulations",
+    body: "Cyberspace Administration of China",
+    what: "Classifies all data, not just personal data, with important-data duties.",
+    obligations: [
+      "Classify data and identify any important data holdings",
+      "Run annual risk assessments for important data and file the report",
+      "Do not provide data to foreign law enforcement without approval",
+    ],
+    link: "https://www.cac.gov.cn/",
+    why: ["China", "data processing"],
+    trigger: (i) => i.t("cn"),
+  },
+  {
+    id: "cnxborder", code: "CN", tier: "mandatory", cat: "privacy",
+    title: "Cross-border data transfer measures (security assessment / SCCs / certification)",
+    body: "Cyberspace Administration of China",
+    what: "Three routes with volume thresholds, eased by the 2024 facilitation provisions.",
+    obligations: [
+      "Determine the applicable route from the volume and data-type thresholds",
+      "File CAC standard contracts with the provincial CAC alongside the impact assessment",
+      "Check free trade zone negative lists for exemptions",
+    ],
+    link: "https://www.cac.gov.cn/",
+    why: ["China", "cross-border transfers"],
+    trigger: (i) => i.t("cn") && i.xborder,
+  },
+  {
+    id: "cngenai", code: "CN", tier: "mandatory", cat: "ai",
+    title: "Interim Measures for Generative AI Services & AI content labelling measures",
+    body: "Cyberspace Administration of China",
+    what: "Filing and labelling obligations for public-facing generative services.",
+    obligations: [
+      "File the algorithm and complete security assessment before public launch",
+      "Apply explicit and implicit labels to AI-generated content",
+      "Meet the training data legality and content moderation requirements",
+    ],
+    link: "https://www.cac.gov.cn/",
+    why: ["China", "public-facing generative AI"],
+    trigger: (i) => i.t("cn") && (i.genai || i.ai === "developer" || i.ai === "gpai"),
+  },
+  {
+    id: "cnalgo", code: "CN", tier: "mandatory", cat: "ai",
+    title: "Algorithmic Recommendation Provisions",
+    body: "Cyberspace Administration of China",
+    what: "Registration and user-control duties for recommendation algorithms.",
+    obligations: [
+      "File the algorithm in the CAC registry and display the filing number",
+      "Offer users an option to turn off algorithmic recommendation",
+      "Apply the protections for minors, elderly users and gig workers",
+    ],
+    link: "https://www.cac.gov.cn/",
+    why: ["China", "platform or recommendation systems"],
+    trigger: (i) => i.t("cn") && (i.sec("platform") || i.ai === "deployer"),
+  },
+
+  /* ---------- South Korea ---------- */
+  {
+    id: "pipa", code: "KR", tier: "mandatory", cat: "privacy",
+    title: "Personal Information Protection Act (PIPA)",
+    body: "Personal Information Protection Commission",
+    what: "One of the most actively enforced regimes in Asia, with heavy administrative fines.",
+    obligations: [
+      "Obtain separate itemised consent for each purpose and for third-party provision",
+      "Report breaches to the PIPC within 72 hours and notify data subjects",
+      "Appoint a chief privacy officer and a domestic representative if overseas",
+      "Meet the automated-decision refusal and explanation rights",
+    ],
+    link: "https://www.pipc.go.kr/eng/",
+    why: ["South Korea", "personal data"],
+    trigger: (i) => i.t("kr") && i.pii,
+  },
+  {
+    id: "ismsp", code: "KR", tier: "conditional", cat: "security",
+    title: "ISMS-P certification",
+    body: "KISA · PIPC · MSIT",
+    what: "Mandatory certification above defined revenue and user thresholds.",
+    obligations: [
+      "Test the mandatory certification thresholds for revenue and daily users",
+      "Implement the management and protection measures across both ISMS and P domains",
+      "Maintain annual follow-up audits",
+    ],
+    link: "https://isms.kisa.or.kr/",
+    why: ["South Korea", "online service or IT operations"],
+    trigger: (i) => i.t("kr") && (i.sec("saas") || i.sec("platform") || i.sec("ecommerce")),
+  },
+  {
+    id: "krai", code: "KR", tier: "mandatory", cat: "ai",
+    title: "AI Framework Act (Basic Act on AI Development and Trust)",
+    body: "Ministry of Science and ICT",
+    what: "In force since 22 January 2026, with a one-year grace period on administrative fines. Extraterritorial.",
+    obligations: [
+      "Identify high-impact AI uses — employment, healthcare, finance, public services, education — and apply the safety duties",
+      "Label generative AI output and disclose AI use to users",
+      "Appoint a domestic representative if you are a large overseas provider",
+      "Note the high-performance threshold is set at 10^26 FLOPs of training compute",
+    ],
+    link: "https://www.msit.go.kr/eng/index.do",
+    why: ["South Korea", "AI in scope"],
+    trigger: (i) => i.t("kr") && i.ai !== "none",
+  },
+
+  /* ---------- Cross-cutting standards ---------- */
+  {
+    id: "pci", code: "GLOBAL", tier: "mandatory", cat: "standard",
+    title: "PCI DSS v4.0.1",
+    body: "PCI Security Standards Council",
+    what: "Contractual rather than statutory — but enforced through the card schemes.",
+    obligations: [
+      "Determine merchant or service provider level and the validation route",
+      "Scope the cardholder data environment and reduce it where possible",
+      "Meet the future-dated v4 requirements now in force",
+    ],
+    link: "https://www.pcisecuritystandards.org/document_library/",
+    why: ["card payments accepted"],
+    trigger: (i) => i.cards,
+  },
+  {
+    id: "iso27001", code: "GLOBAL", tier: "framework", cat: "standard",
+    title: "ISO/IEC 27001:2022",
+    body: "ISO/IEC",
+    what: "The default certification most of the obligations above will be evidenced through.",
+    obligations: [
+      "Define the ISMS scope against your regulatory footprint, not your org chart",
+      "Produce the Statement of Applicability covering the 93 Annex A controls",
+      "Run internal audit and management review before certification",
+    ],
+    link: "https://www.iso.org/standard/27001",
+    why: ["any regulated security obligation"],
+    trigger: (i) => i.any,
+  },
+  {
+    id: "iso27701", code: "GLOBAL", tier: "framework", cat: "standard",
+    title: "ISO/IEC 27701 — privacy information management",
+    body: "ISO/IEC",
+    what: "Extends the ISMS to privacy; useful when several privacy regimes overlap.",
+    obligations: [
+      "Extend the ISMS scope to PII controller and processor roles",
+      "Use the mapping annexes to evidence multi-jurisdiction privacy obligations",
+    ],
+    link: "https://www.iso.org/standard/71670.html",
+    why: ["personal data", "multiple privacy regimes"],
+    trigger: (i) => i.pii,
+  },
+  {
+    id: "iso42001", code: "GLOBAL", tier: "framework", cat: "standard",
+    title: "ISO/IEC 42001:2023 — AI management system",
+    body: "ISO/IEC",
+    what: "The certifiable AI governance standard. Note it is no longer a statutory safe harbour anywhere in the US — Colorado removed that route in 2026.",
+    obligations: [
+      "Establish the AIMS with an AI policy and defined roles",
+      "Complete the Annex A controls and the AI system impact assessment",
+      "Maintain lifecycle documentation for each AI system",
+    ],
+    link: "https://www.iso.org/standard/81230.html",
+    why: ["AI in scope"],
+    trigger: (i) => i.ai !== "none",
+  },
+  {
+    id: "iso23894", code: "GLOBAL", tier: "framework", cat: "standard",
+    title: "ISO/IEC 23894:2023 — AI risk management guidance",
+    body: "ISO/IEC",
+    what: "Applies ISO 31000 risk practice to AI; pairs with 42001 rather than replacing it.",
+    obligations: [
+      "Integrate AI risk into the enterprise risk framework",
+      "Use the annexes to structure AI-specific risk sources",
+    ],
+    link: "https://www.iso.org/standard/77304.html",
+    why: ["AI in scope"],
+    trigger: (i) => i.ai !== "none",
+  },
+  {
+    id: "nistcsf", code: "GLOBAL", tier: "framework", cat: "standard",
+    title: "NIST Cybersecurity Framework 2.0",
+    body: "NIST",
+    what: "The common denominator for US regulatory expectations, now with a Govern function.",
+    obligations: [
+      "Build current and target profiles against the six functions",
+      "Use the informative references to map to your statutory obligations",
+    ],
+    link: "https://www.nist.gov/cyberframework",
+    why: ["any regulated security obligation"],
+    trigger: (i) => i.any,
+  },
+  {
+    id: "nistairmf", code: "GLOBAL", tier: "framework", cat: "standard",
+    title: "NIST AI Risk Management Framework 1.0",
+    body: "NIST",
+    what: "Voluntary, but cited as a compliance route in US state AI law.",
+    obligations: [
+      "Apply the Govern, Map, Measure, Manage functions to each AI use case",
+      "Use the Generative AI Profile where applicable",
+    ],
+    link: "https://www.nist.gov/itl/ai-risk-management-framework",
+    why: ["AI in scope"],
+    trigger: (i) => i.ai !== "none",
+  },
+  {
+    id: "soc2", code: "GLOBAL", tier: "framework", cat: "standard",
+    title: "SOC 2 Type II",
+    body: "AICPA",
+    what: "A commercial requirement rather than a legal one — customers will ask before regulators do.",
+    obligations: [
+      "Select trust services criteria beyond Security only where customers require it",
+      "Run a minimum observation window, usually 6 to 12 months",
+    ],
+    link: "https://www.aicpa-cima.com/topic/audit-assurance/audit-and-assurance-greater-than-soc-2",
+    why: ["software or cloud services"],
+    trigger: (i) => i.sec("saas"),
+  },
+  {
+    id: "owasp", code: "GLOBAL", tier: "guidance", cat: "standard",
+    title: "OWASP Top 10 & OWASP Top 10 for LLM Applications",
+    body: "OWASP Foundation",
+    what: "The reference for what 'appropriate technical measures' means in practice for applications.",
+    obligations: [
+      "Test against the application and LLM risk categories in your SDLC",
+      "Document coverage as evidence for the security obligations above",
+    ],
+    link: "https://owasp.org/www-project-top-10-for-large-language-model-applications/",
+    why: ["software", "or AI in scope"],
+    trigger: (i) => i.sec("saas") || i.ai !== "none",
+  },
+];
+
+/* ------------------------------------------------------------------
+   COMPONENT
+------------------------------------------------------------------- */
+
+const CODE_LEGEND = TERRITORY_GROUPS
+  .flatMap((g) => g.items.map((x) => ({ code: x.code, name: x.name })))
+  .concat([{ code: "GLOBAL", name: "Applies regardless of territory" }]);
+
+const COVERAGE_ORDER = TERRITORY_GROUPS
+  .flatMap((g) => g.items.map((x) => x.code))
+  .filter((c, n, a) => a.indexOf(c) === n)
+  .concat(["GLOBAL"]);
+
+const SCOPE_NOTE = "Coverage is deliberately centred on information security, cybersecurity, data protection and AI governance. Financial services, prudential, tax, AML, sanctions, employment and sustainability instruments appear only where they carry a security or data obligation \u2014 that domain was never systematically scoped, so absence here is not a finding.";
+
+export default function ApplicabilityRegister() {
+  const [terr, setTerr] = useState([]);
+  const [sectors, setSectors] = useState(["general"]);
+  const [supplier, setSupplier] = useState(null);
+  const [pii, setPii] = useState(null);
+  const [special, setSpecial] = useState(null);
+  const [health, setHealth] = useState(null);
+  const [children, setChildren] = useState(null);
+  const [cards, setCards] = useState(null);
+  const [xborder, setXborder] = useState(null);
+  const [aiRole, setAiRole] = useState("none");
+  const [genai, setGenai] = useState(null);
+  const [scale, setScale] = useState("50-249");
+  const [listed, setListed] = useState(null);
+  const [filter, setFilter] = useState("all");
+  const [open, setOpen] = useState([]);
+  const [legend, setLegend] = useState(false);
+  const [catalogue, setCatalogue] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const toggle = (arr, set, v) =>
+    set(arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v]);
+
+  const input = useMemo(() => {
+    const EU_MEMBERS = ["de"];
+    const t = (c) =>
+      c === "eu"
+        ? terr.some((x) => x === "eu" || EU_MEMBERS.includes(x))
+        : terr.includes(c);
+    return {
+      t,
+      us: terr.some((x) => x === "us" || x.startsWith("us-")),
+      sec: (s) => sectors.includes(s),
+      supplier: supplier === true,
+      pii: pii === true,
+      special: special === true,
+      health: health === true,
+      children: children === true,
+      cards: cards === true,
+      xborder: xborder === true,
+      ai: aiRole,
+      genai: genai === true,
+      scale,
+      listed: listed === true,
+      any: terr.length > 0,
+    };
+  }, [terr, sectors, supplier, pii, special, health, children, cards, xborder, aiRole, genai, scale, listed]);
+
+  const results = useMemo(() => {
+    if (terr.length === 0) return [];
+    return RULES.filter((r) => {
+      try { return r.trigger(input); } catch { return false; }
+    });
+  }, [input, terr]);
+
+  const shown = results.filter((r) => filter === "all" || r.cat === filter);
+  const unanswered = [supplier, pii, special, health, children, cards, xborder, genai, listed]
+    .filter((v) => v === null).length;
+
+  const grouped = TIERS.map((t) => ({
+    ...t,
+    items: shown.filter((r) => r.tier === t.id),
+  })).filter((g) => g.items.length > 0);
+
+  const copySummary = () => {
+    const lines = [
+      "APPLICABILITY REGISTER — scoping output",
+      "",
+      "SCOPE",
+      `Territories: ${terr.join(", ") || "none"}`,
+      `Sectors: ${sectors.join(", ")}`,
+      `Supplies regulated entities: ${supplier ? "yes" : "no"}`,
+      `Personal data: ${pii ? "yes" : "no"} · Special category: ${special ? "yes" : "no"} · Children: ${children ? "yes" : "no"}`,
+      `Card payments: ${cards ? "yes" : "no"} · Cross-border transfers: ${xborder ? "yes" : "no"}`,
+      `AI role: ${aiRole} · Public generative AI: ${genai ? "yes" : "no"}`,
+      `Headcount: ${scale} · Listed: ${listed ? "yes" : "no"}`,
+      "",
+      `INSTRUMENTS IDENTIFIED: ${results.length}`,
+      "",
+      ...TIERS.flatMap((t) => {
+        const items = results.filter((r) => r.tier === t.id);
+        if (!items.length) return [];
+        return [
+          `— ${t.label.toUpperCase()} —`,
+          ...items.map((r) => `[${r.code}] ${r.title}\n    ${r.link}`),
+          "",
+        ];
+      }),
+      "Scoping aid only. Verify every instrument against its primary source.",
+    ];
+    try {
+      navigator.clipboard.writeText(lines.join("\n"));
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2200);
+    } catch (e) {
+      setCopied(false);
+    }
+  };
+
+  const reportHtml = () => {
+    const e = (x) => String(x).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+    const all = results;
+    const scope = [
+      ["Territories", terr.join(", ") || "none"],
+      ["Sectors", sectors.join(", ")],
+      ["Supplies regulated entities", supplier ? "yes" : "no"],
+      ["Personal data", pii ? "yes" : "no"],
+      ["Special category data", special ? "yes" : "no"],
+      ["Health data", health ? "yes" : "no"],
+      ["Children's data", children ? "yes" : "no"],
+      ["Card payments", cards ? "yes" : "no"],
+      ["Cross-border transfers", xborder ? "yes" : "no"],
+      ["AI role", aiRole],
+      ["Public generative AI", genai ? "yes" : "no"],
+      ["Headcount", scale],
+      ["Listed on a US exchange", listed ? "yes" : "no"],
+    ];
+    let body = "";
+    TIERS.forEach((t) => {
+      const items = all.filter((r) => r.tier === t.id);
+      if (!items.length) return;
+      body += `<h2>${e(t.label)} <span class="n">${items.length}</span></h2><p class="note">${e(t.note)}</p>`;
+      items.forEach((r) => {
+        body += `<div class="item"><h3><span class="c">${e(r.code)}</span>${e(r.title)}</h3>` +
+          `<p class="auth">${e(r.body)}</p><p class="what">${e(r.what)}</p>` +
+          `<p class="trace">Triggered by: ${r.why.map(e).join(" + ")}</p><ul>` +
+          r.obligations.map((o) => `<li>${e(o)}</li>`).join("") +
+          `</ul><p class="src">${e(r.link)}</p></div>`;
+      });
+    });
+    return `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
+<title>Applicability Register — scoping output</title><style>
+@page{margin:18mm 16mm;}
+body{font-family:"IBM Plex Sans",system-ui,sans-serif;color:#0E2435;font-size:11pt;line-height:1.5;margin:0;}
+h1{font-size:23pt;margin:0 0 4px;letter-spacing:-.02em;}
+.sub{color:#456379;font-size:10pt;margin:0 0 3px;}
+.rule{border-bottom:2.5px solid #0F4E82;margin:14px 0 18px;}
+h2{font-size:14pt;margin:26px 0 3px;border-bottom:1.5px solid #C0D8E9;padding-bottom:4px;}
+h2 .n{color:#456379;font-weight:400;font-size:11pt;}
+.note{color:#456379;font-size:9.5pt;margin:0 0 12px;}
+.item{break-inside:avoid;page-break-inside:avoid;margin:0 0 15px;padding-left:11px;border-left:3.5px solid #C0D8E9;}
+.item h3{font-size:11.5pt;margin:0 0 3px;line-height:1.3;}
+.c{display:inline-block;background:#D9EAF8;color:#0F4E82;border-radius:3px;padding:1px 6px;
+  font-family:"IBM Plex Mono",monospace;font-size:8.5pt;margin-right:8px;}
+.auth{color:#456379;font-size:9pt;margin:0 0 5px;}
+.what{margin:0 0 6px;}
+.trace{font-family:"IBM Plex Mono",monospace;font-size:8.5pt;color:#456379;margin:0 0 6px;}
+ul{margin:0 0 6px;padding-left:17px;}
+li{margin-bottom:3px;}
+.src{font-family:"IBM Plex Mono",monospace;font-size:8pt;color:#0F4E82;margin:0;word-break:break-all;}
+table{border-collapse:collapse;font-size:9.5pt;margin-bottom:6px;}
+td{padding:2px 16px 2px 0;vertical-align:top;}
+td.k{color:#456379;}
+.disc{margin-top:26px;padding:11px 13px;background:#F3F9FD;border:1.5px solid #C0D8E9;
+  border-radius:5px;font-size:9pt;color:#456379;line-height:1.5;break-inside:avoid;}
+</style></head><body>
+<h1>Applicability Register</h1>
+<p class="sub">Regulatory scoping output · generated ${new Date().toISOString().slice(0, 10)}</p>
+<p class="sub">${e(SCOPE_NOTE)}</p>
+<div class="rule"></div>
+<h2>Scope declared <span class="n">${all.length} instruments identified</span></h2>
+<table>${scope.map(([k, v]) => `<tr><td class="k">${e(k)}</td><td>${e(v)}</td></tr>`).join("")}</table>
+${body}
+<div class="disc"><b>Not legal advice.</b> This register is a scoping aid, not a compliance assessment.
+It fires on coarse predicates and will over-include as often as it under-includes: thresholds, exemptions
+and extraterritorial reach turn on facts the form does not ask for. Effective dates move. Verify every
+instrument against its primary source, and treat absence as untested rather than cleared.</div>
+</body></html>`;
+  };
+
+  const openReport = () => {
+    const html = reportHtml();
+    let w = null;
+    try { w = window.open("", "_blank"); } catch (e) { w = null; }
+    if (w && w.document) {
+      w.document.open(); w.document.write(html); w.document.close();
+      setTimeout(() => { try { w.focus(); w.print(); } catch (e) {} }, 500);
+      return;
+    }
+    try {
+      const blob = new Blob([html], { type: "text/html" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = "applicability-register-report.html";
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+    } catch (e) {}
+  };
+
+  const css = `
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
+
+.reg { --page:#E6EFF7; --win:#FFFFFF; --win-2:#F3F9FD;
+  --ink:#0E2435; --ink-2:#456379; --rule:#C0D8E9; --rule-2:#A3C4DD;
+  --blue:#1A6FB5; --blue-d:#0F4E82; --blue-l:#D9EAF8;
+  --mand:#B0374A; --cond:#B0700F; --fw:#1A6FB5; --guid:#5B7B98;
+  background:var(--page); color:var(--ink); min-height:100vh;
+  font-family:'IBM Plex Sans',system-ui,-apple-system,sans-serif;
+  font-size:17px; line-height:1.55; -webkit-font-smoothing:antialiased; }
+.reg *,.reg *::before,.reg *::after{box-sizing:border-box;}
+.reg button{font-family:inherit;color:inherit;cursor:pointer;}
+.reg :focus-visible{outline:3px solid var(--blue);outline-offset:2px;}
+
+.reg-shell{max-width:1360px;margin:0 auto;padding:0 22px 90px;}
+
+.reg-head{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;
+  gap:26px;padding:40px 0 24px;border-bottom:3px solid var(--blue-d);}
+.reg-eyebrow{font-family:'IBM Plex Mono',monospace;font-size:12.5px;font-weight:500;
+  letter-spacing:.13em;text-transform:uppercase;color:var(--blue-d);margin:0 0 9px;}
+.reg-title{font-weight:600;font-size:clamp(40px,6.4vw,62px);line-height:1;
+  letter-spacing:-.025em;margin:0;}
+.reg-title em{font-style:normal;color:var(--blue);}
+.reg-scopeline{font-size:15.5px;color:var(--ink-2);margin:11px 0 0;max-width:56ch;line-height:1.45;}
+.reg-tally{flex-shrink:0;background:var(--blue-d);border-radius:8px;
+  padding:14px 22px;text-align:center;color:#fff;}
+.reg-tally-n{font-size:46px;font-weight:600;line-height:1;display:block;
+  font-variant-numeric:tabular-nums;letter-spacing:-.02em;}
+.reg-tally-l{font-family:'IBM Plex Mono',monospace;font-size:11.5px;font-weight:500;
+  letter-spacing:.11em;text-transform:uppercase;opacity:.85;margin-top:5px;display:block;}
+
+.reg-body{display:grid;grid-template-columns:400px 1fr;gap:34px;align-items:start;}
+@media (max-width:980px){.reg-body{grid-template-columns:1fr;gap:24px;}}
+
+.reg-scope{position:sticky;top:18px;max-height:calc(100vh - 36px);overflow-y:auto;
+  padding:24px 4px 40px 0;}
+@media (max-width:980px){.reg-scope{position:static;max-height:none;padding-right:0;}}
+
+/* ---- windows ---- */
+.win{background:var(--win);border:2px solid var(--rule);border-radius:8px;
+  margin-bottom:16px;overflow:hidden;}
+.win-h{display:flex;align-items:center;gap:11px;padding:12px 16px;
+  background:var(--win-2);border-bottom:2px solid var(--rule);}
+.win-n{font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600;
+  color:#fff;background:var(--blue-d);border-radius:5px;padding:3px 8px;letter-spacing:.02em;}
+.win-t{font-size:14.5px;font-weight:600;letter-spacing:.075em;text-transform:uppercase;margin:0;}
+.win-b{padding:15px 16px;}
+.win-note{font-size:14px;color:var(--ink-2);margin:0 0 11px;line-height:1.45;}
+
+.reg-sub{font-family:'IBM Plex Mono',monospace;font-size:11.5px;font-weight:600;
+  letter-spacing:.11em;text-transform:uppercase;color:var(--ink-2);margin:14px 0 8px;}
+.reg-sub:first-child{margin-top:0;}
+.reg-chips{display:flex;flex-wrap:wrap;gap:7px;}
+
+.reg-chip{background:#fff;border:2px solid var(--rule-2);border-radius:6px;
+  padding:8px 13px;font-family:'IBM Plex Mono',monospace;font-size:13.5px;font-weight:600;
+  letter-spacing:.02em;color:var(--ink-2);transition:background .12s,border-color .12s,color .12s;}
+.reg-chip:hover{border-color:var(--blue);background:var(--blue-l);color:var(--blue-d);}
+.reg-chip[data-on="1"]{background:var(--blue);border-color:var(--blue-d);color:#fff;}
+
+.reg-opt{background:#fff;border:2px solid var(--rule-2);border-radius:6px;
+  padding:8px 14px;font-size:15px;font-weight:500;color:var(--ink-2);
+  transition:background .12s,border-color .12s,color .12s;}
+.reg-opt:hover{border-color:var(--blue);background:var(--blue-l);color:var(--blue-d);}
+.reg-opt[data-on="1"]{background:var(--blue);border-color:var(--blue-d);color:#fff;}
+
+/* ---- one bordered box per question ---- */
+.qbox{display:flex;align-items:center;justify-content:space-between;gap:14px;
+  border:2px solid var(--rule);border-radius:6px;background:var(--win-2);
+  padding:11px 13px;margin-bottom:9px;}
+.qbox:last-child{margin-bottom:0;}
+.qbox-t{font-size:15.5px;line-height:1.38;}
+.reg-yn{display:flex;gap:6px;flex-shrink:0;}
+.reg-yn button{border:2px solid var(--rule-2);background:#fff;border-radius:6px;
+  padding:6px 15px;font-family:'IBM Plex Mono',monospace;font-size:12.5px;font-weight:600;
+  letter-spacing:.07em;color:var(--ink-2);transition:background .12s,border-color .12s,color .12s;}
+.reg-yn button:hover{border-color:var(--blue);color:var(--blue-d);}
+.reg-yn button[data-on="1"]{background:var(--blue);border-color:var(--blue-d);color:#fff;}
+.reg-yn button[data-on="1"][data-no="1"]{background:var(--ink-2);border-color:var(--ink);color:#fff;}
+
+.reg-roles{display:flex;flex-direction:column;gap:8px;}
+.reg-role{text-align:left;background:#fff;border:2px solid var(--rule-2);border-radius:6px;
+  padding:11px 13px;transition:background .12s,border-color .12s;}
+.reg-role:hover{border-color:var(--blue);background:var(--blue-l);}
+.reg-role-n{font-size:15.5px;font-weight:600;display:block;}
+.reg-role-h{font-size:13.5px;color:var(--ink-2);display:block;margin-top:3px;line-height:1.4;}
+.reg-role[data-on="1"]{background:var(--blue);border-color:var(--blue-d);}
+.reg-role[data-on="1"] .reg-role-n{color:#fff;}
+.reg-role[data-on="1"] .reg-role-h{color:var(--blue-l);}
+
+/* ---- legend ---- */
+.legend-btn{background:#fff;border:2px solid var(--rule-2);border-radius:6px;
+  padding:6px 13px;font-family:'IBM Plex Mono',monospace;font-size:12.5px;font-weight:600;
+  letter-spacing:.07em;text-transform:uppercase;color:var(--blue-d);}
+.legend-btn:hover{background:var(--blue-l);border-color:var(--blue);}
+.legend-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:9px;}
+.legend-i{display:flex;align-items:baseline;gap:10px;font-size:15px;}
+.legend-c{font-family:'IBM Plex Mono',monospace;font-size:12.5px;font-weight:600;
+  color:var(--blue-d);background:var(--blue-l);border:1.5px solid var(--rule-2);
+  border-radius:5px;padding:3px 7px;min-width:64px;text-align:center;flex-shrink:0;}
+.legend-n{color:var(--ink-2);line-height:1.35;}
+
+/* ---- manifest ---- */
+.reg-manifest{padding:24px 0 0;min-width:0;}
+.reg-bar{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;
+  gap:14px;margin-bottom:20px;}
+.reg-filters{display:flex;flex-wrap:wrap;gap:7px;}
+.reg-filter{background:#fff;border:2px solid var(--rule-2);border-radius:6px;
+  padding:7px 14px;font-size:14px;font-weight:600;color:var(--ink-2);
+  transition:background .12s,border-color .12s,color .12s;}
+.reg-filter:hover{border-color:var(--blue);background:var(--blue-l);color:var(--blue-d);}
+.reg-filter[data-on="1"]{background:var(--blue-d);border-color:var(--blue-d);color:#fff;}
+.reg-acts{display:flex;gap:8px;}
+.reg-export{background:#fff;border:2px solid var(--blue-d);border-radius:6px;
+  padding:7px 15px;font-size:13.5px;font-weight:600;color:var(--blue-d);}
+.reg-export:hover{background:var(--blue-d);color:#fff;}
+
+.reg-tier{margin-bottom:34px;}
+.reg-tier-h{display:flex;align-items:center;gap:11px;margin-bottom:5px;}
+.reg-tier-n{font-size:23px;font-weight:600;letter-spacing:-.015em;margin:0;}
+.reg-tier-c{font-family:'IBM Plex Mono',monospace;font-size:12.5px;font-weight:600;
+  color:#fff;background:var(--ink-2);border-radius:5px;padding:2px 8px;}
+.reg-tier-note{font-size:14.5px;color:var(--ink-2);margin:0 0 14px;max-width:66ch;line-height:1.45;}
+
+.reg-card{background:var(--win);border:2px solid var(--rule);border-left-width:7px;
+  border-radius:7px;margin-bottom:10px;}
+.reg-card[data-tier="mandatory"]{border-left-color:var(--mand);}
+.reg-card[data-tier="conditional"]{border-left-color:var(--cond);}
+.reg-card[data-tier="framework"]{border-left-color:var(--fw);}
+.reg-card[data-tier="guidance"]{border-left-color:var(--guid);}
+.reg-card:hover{border-color:var(--rule-2);}
+
+.reg-card-btn{display:block;width:100%;text-align:left;background:transparent;
+  border:none;padding:15px 17px;}
+.reg-card-top{display:flex;align-items:flex-start;gap:13px;}
+.reg-code{font-family:'IBM Plex Mono',monospace;font-size:12.5px;font-weight:600;
+  color:var(--blue-d);background:var(--blue-l);border:1.5px solid var(--rule-2);
+  border-radius:5px;padding:3px 7px;flex-shrink:0;min-width:64px;text-align:center;}
+.reg-card-t{font-size:17.5px;font-weight:600;line-height:1.32;letter-spacing:-.012em;}
+.reg-card-b{font-size:14px;color:var(--ink-2);margin-top:4px;}
+.reg-card-w{font-size:15.5px;color:var(--ink-2);margin-top:8px;line-height:1.5;max-width:70ch;}
+.reg-trace{font-family:'IBM Plex Mono',monospace;font-size:12.5px;color:var(--ink-2);
+  margin-top:11px;padding-top:9px;border-top:1.5px dashed var(--rule);}
+.reg-trace b{color:var(--blue-d);font-weight:600;}
+
+.reg-detail{padding:0 17px 16px 84px;}
+@media (max-width:680px){.reg-detail{padding-left:17px;}}
+.reg-ob{list-style:none;margin:0 0 14px;padding:0;}
+.reg-ob li{position:relative;padding-left:22px;margin-bottom:7px;font-size:15.5px;
+  line-height:1.5;max-width:72ch;}
+.reg-ob li::before{content:"→";position:absolute;left:0;color:var(--blue);
+  font-weight:600;top:0;}
+.reg-link{display:inline-block;font-size:13.5px;font-weight:600;letter-spacing:.05em;
+  text-transform:uppercase;color:#fff;background:var(--blue-d);border-radius:6px;
+  padding:7px 14px;text-decoration:none;}
+.reg-link:hover{background:var(--blue);}
+
+.cov-list{list-style:none;margin:0 0 14px;padding:0;}
+.cov-list li{display:flex;gap:10px;align-items:baseline;font-size:15px;margin-bottom:6px;line-height:1.4;}
+.cov-dot{width:10px;height:10px;border-radius:3px;flex-shrink:0;position:relative;top:1px;background:var(--guid);}
+.cov-dot[data-tier="mandatory"]{background:var(--mand);}
+.cov-dot[data-tier="conditional"]{background:var(--cond);}
+.cov-dot[data-tier="framework"]{background:var(--fw);}
+.cov-list a{color:var(--ink);text-decoration:none;border-bottom:1.5px solid var(--rule-2);}
+.cov-list a:hover{color:var(--blue-d);border-bottom-color:var(--blue);}
+.cov-key{display:flex;flex-wrap:wrap;gap:14px;font-size:13.5px;color:var(--ink-2);
+  margin-bottom:14px;padding-bottom:12px;border-bottom:1.5px solid var(--rule);}
+.cov-key span{display:flex;align-items:center;gap:6px;}
+
+.reg-empty{background:var(--win);border:2px dashed var(--rule-2);border-radius:8px;
+  padding:46px 26px;text-align:center;}
+.reg-empty h3{font-size:24px;font-weight:600;margin:0 0 9px;}
+.reg-empty p{font-size:15.5px;color:var(--ink-2);margin:0 auto;max-width:46ch;line-height:1.5;}
+
+.reg-flag{background:#FFF8E8;border:2px solid var(--cond);border-radius:7px;
+  padding:13px 15px;margin-bottom:20px;font-size:15px;line-height:1.5;color:var(--ink);}
+
+.reg-foot{margin-top:40px;padding:18px 20px;background:var(--win);
+  border:2px solid var(--rule);border-radius:8px;
+  font-size:14.5px;color:var(--ink-2);line-height:1.55;max-width:78ch;}
+.reg-foot strong{color:var(--ink);font-weight:600;}
+
+@media (prefers-reduced-motion:reduce){.reg *{transition:none!important;}}
+@media print{
+  .reg-scope,.reg-bar{display:none;}
+  .reg-body{grid-template-columns:1fr;}
+  .reg-card{break-inside:avoid;}
+}
+`;
+
+  const Win = ({ n, title, note, children }) => (
+    <section className="win">
+      <div className="win-h">
+        <span className="win-n">{n}</span>
+        <h3 className="win-t">{title}</h3>
+      </div>
+      <div className="win-b">
+        {note && <p className="win-note">{note}</p>}
+        {children}
+      </div>
+    </section>
+  );
+
+  const YN = ({ v, set, label }) => (
+    <div className="qbox">
+      <span className="qbox-t">{label}</span>
+      <span className="reg-yn">
+        <button data-on={v === true ? "1" : "0"} onClick={() => set(true)} aria-pressed={v === true}>YES</button>
+        <button data-on={v === false ? "1" : "0"} data-no="1" onClick={() => set(false)} aria-pressed={v === false}>NO</button>
+      </span>
+    </div>
+  );
+
+  return (
+    <div className="reg">
+      <style>{css}</style>
+      <div className="reg-shell">
+        <header className="reg-head">
+          <div>
+            <p className="reg-eyebrow">Information security · data protection · AI governance</p>
+            <h1 className="reg-title">Applicability <em>Register</em></h1>
+            <p className="reg-scopeline">A deterministic scoping instrument for security, privacy and AI obligations.
+              Financial, tax, AML and sustainability regimes are out of its intended scope.</p>
+          </div>
+          <div className="reg-tally">
+            <span className="reg-tally-n">{String(results.length).padStart(2, "0")}</span>
+            <span className="reg-tally-l">instruments in scope</span>
+          </div>
+        </header>
+
+        <div className="reg-body">
+          <aside className="reg-scope">
+            <Win n="01" title="Where you operate">
+              {TERRITORY_GROUPS.map((g) => (
+                <div key={g.label}>
+                  <p className="reg-sub">{g.label}</p>
+                  <div className="reg-chips">
+                    {g.items.map((x) => (
+                      <button key={x.id} className="reg-chip" data-on={terr.includes(x.id) ? "1" : "0"}
+                        aria-pressed={terr.includes(x.id)}
+                        onClick={() => toggle(terr, setTerr, x.id)} title={x.name}>
+                        {x.code}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </Win>
+
+            <Win n="02" title="What you do">
+              <div className="reg-chips">
+                {SECTORS.map((s) => (
+                  <button key={s.id} className="reg-opt" data-on={sectors.includes(s.id) ? "1" : "0"}
+                    aria-pressed={sectors.includes(s.id)}
+                    onClick={() => toggle(sectors, setSectors, s.id)}>{s.name}</button>
+                ))}
+              </div>
+            </Win>
+
+            <Win n="03" title="Who you serve">
+              <YN v={supplier} set={setSupplier} label="You supply banks, insurers or government bodies" />
+            </Win>
+
+            <Win n="04" title="Data you handle">
+              <YN v={pii} set={setPii} label="Personal data of identifiable people" />
+              <YN v={special} set={setSpecial} label="Biometrics, race, religion, or other special categories" />
+              <YN v={health} set={setHealth} label="Health or health-adjacent data" />
+              <YN v={children} set={setChildren} label="Data about children" />
+              <YN v={cards} set={setCards} label="Card payments" />
+              <YN v={xborder} set={setXborder} label="Transfers across borders" />
+            </Win>
+
+            <Win n="05" title="Your role in AI">
+              <div className="reg-roles">
+                {AI_ROLES.map((r) => (
+                  <button key={r.id} className="reg-role" data-on={aiRole === r.id ? "1" : "0"}
+                    aria-pressed={aiRole === r.id} onClick={() => setAiRole(r.id)}>
+                    <span className="reg-role-n">{r.name}</span>
+                    <span className="reg-role-h">{r.hint}</span>
+                  </button>
+                ))}
+              </div>
+              {aiRole !== "none" && (
+                <div style={{ marginTop: 10 }}>
+                  <YN v={genai} set={setGenai} label="Generative AI facing the public" />
+                </div>
+              )}
+            </Win>
+
+            <Win n="06" title="Size">
+              <div className="reg-chips" style={{ marginBottom: 10 }}>
+                {["<50", "50-249", "250+"].map((s) => (
+                  <button key={s} className="reg-opt" data-on={scale === s ? "1" : "0"}
+                    aria-pressed={scale === s} onClick={() => setScale(s)}>{s} staff</button>
+                ))}
+              </div>
+              <YN v={listed} set={setListed} label="Listed on a US exchange" />
+            </Win>
+          </aside>
+
+          <main className="reg-manifest">
+            <section className="win">
+              <div className="win-h">
+                <span className="win-n">KEY</span>
+                <h3 className="win-t">Jurisdiction codes</h3>
+                <button className="legend-btn" style={{ marginLeft: "auto" }}
+                  onClick={() => setLegend(!legend)} aria-expanded={legend}>
+                  {legend ? "Hide" : "Show all"}
+                </button>
+              </div>
+              {legend && (
+                <div className="win-b">
+                  <div className="legend-grid">
+                    {CODE_LEGEND.map((c) => (
+                      <div className="legend-i" key={c.code}>
+                        <span className="legend-c">{c.code}</span>
+                        <span className="legend-n">{c.name}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="win-note" style={{ marginTop: 14, marginBottom: 0 }}>
+                    Member states inherit the EU acquis: selecting DE returns EU instruments as well as German ones.
+                    GLOBAL marks instruments that attach to an activity rather than a territory.
+                  </p>
+                </div>
+              )}
+            </section>
+
+            {catalogue && (
+              <section className="win">
+                <div className="win-h">
+                  <span className="win-n">ALL</span>
+                  <h3 className="win-t">What this register covers</h3>
+                  <button className="legend-btn" style={{ marginLeft: "auto" }}
+                    onClick={() => setCatalogue(false)}>Hide</button>
+                </div>
+                <div className="win-b">
+                  <p className="win-note">{SCOPE_NOTE}</p>
+                  <div className="cov-key">
+                    {TIERS.map((t) => (
+                      <span key={t.id}><i className="cov-dot" data-tier={t.id} />{t.label}</span>
+                    ))}
+                  </div>
+                  {COVERAGE_ORDER.map((code) => {
+                    const items = RULES.filter((r) => r.code === code);
+                    if (!items.length) return null;
+                    return (
+                      <div key={code}>
+                        <p className="reg-sub">{code} · {items.length}</p>
+                        <ul className="cov-list">
+                          {items.map((r) => (
+                            <li key={r.id}>
+                              <span className="cov-dot" data-tier={r.tier} />
+                              <a href={r.link} target="_blank" rel="noreferrer">{r.title}</a>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    );
+                  })}
+                  <p className="win-note" style={{ marginBottom: 0 }}>
+                    {RULES.length} instruments in the catalogue. This list is everything the register knows about —
+                    an instrument that is not here will never appear in a result, whatever you answer.
+                  </p>
+                </div>
+              </section>
+            )}
+
+            <div className="reg-bar">
+              <div className="reg-filters">
+                {CATS.map((c) => (
+                  <button key={c.id} className="reg-filter" data-on={filter === c.id ? "1" : "0"}
+                    onClick={() => setFilter(c.id)}>{c.label}</button>
+                ))}
+              </div>
+              <div className="reg-acts">
+                <button className="reg-export" onClick={() => setCatalogue(!catalogue)}>
+                  {catalogue ? "Hide coverage" : "What this covers"}
+                </button>
+                {results.length > 0 && (
+                  <>
+                    <button className="reg-export" onClick={copySummary}>
+                      {copied ? "Copied" : "Copy register"}
+                    </button>
+                    <button className="reg-export" onClick={openReport}>Print / PDF report</button>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {terr.length === 0 ? (
+              <div className="reg-empty">
+                <h3>No territory selected</h3>
+                <p>Pick at least one territory in window 01. Nothing is inferred — the register only returns what your answers actually trigger.</p>
+              </div>
+            ) : (
+              <>
+                {unanswered > 0 && (
+                  <div className="reg-flag">
+                    {unanswered} question{unanswered === 1 ? "" : "s"} left unanswered. Unanswered reads as <em>no</em>, so instruments that depend on those facts stay hidden.
+                  </div>
+                )}
+                {grouped.length === 0 ? (
+                  <div className="reg-empty">
+                    <h3>Nothing in this view</h3>
+                    <p>No instrument in scope falls under that filter. Switch back to Everything to see the full register.</p>
+                  </div>
+                ) : (
+                  grouped.map((g) => (
+                    <section className="reg-tier" key={g.id}>
+                      <div className="reg-tier-h">
+                        <h2 className="reg-tier-n">{g.label}</h2>
+                        <span className="reg-tier-c">{String(g.items.length).padStart(2, "0")}</span>
+                      </div>
+                      <p className="reg-tier-note">{g.note}</p>
+                      {g.items.map((r) => {
+                        const isOpen = open.includes(r.id);
+                        return (
+                          <article className="reg-card" data-tier={r.tier} key={r.id}>
+                            <button className="reg-card-btn" aria-expanded={isOpen}
+                              onClick={() => toggle(open, setOpen, r.id)}>
+                              <div className="reg-card-top">
+                                <span className="reg-code">{r.code}</span>
+                                <div style={{ minWidth: 0 }}>
+                                  <div className="reg-card-t">{r.title}</div>
+                                  <div className="reg-card-b">{r.body}</div>
+                                  <div className="reg-card-w">{r.what}</div>
+                                  <div className="reg-trace">
+                                    {r.why.map((w, n) => (
+                                      <span key={n}>{n > 0 && " ∧ "}{w}</span>
+                                    ))}
+                                    {" → "}<b>{isOpen ? "collapse" : "obligations"}</b>
+                                  </div>
+                                </div>
+                              </div>
+                            </button>
+                            {isOpen && (
+                              <div className="reg-detail">
+                                <ul className="reg-ob">
+                                  {r.obligations.map((o, n) => <li key={n}>{o}</li>)}
+                                </ul>
+                                <a className="reg-link" href={r.link} target="_blank" rel="noreferrer">
+                                  Primary source ↗
+                                </a>
+                              </div>
+                            )}
+                          </article>
+                        );
+                      })}
+                    </section>
+                  ))
+                )}
+              </>
+            )}
+
+            <footer className="reg-foot">
+              <strong>Scope of this register.</strong> It covers information security, cybersecurity, data protection
+              and AI governance. Financial services and prudential regulation, tax, AML and sanctions, employment,
+              consumer and sustainability regimes were never systematically scoped; a few appear only because they
+              carry a security or data obligation. Do not read a silence in those domains as a negative finding —
+              the register was not looking.
+              <br /><br />
+              <strong>Read this before you use the output.</strong> The register is a scoping aid, not legal advice
+              and not a compliance assessment. It fires on coarse predicates, so it will over-include as often as it
+              under-includes: thresholds, exemptions and extraterritorial reach all turn on facts this form does not
+              ask for. Effective dates move — several AI instruments listed here have been amended or delayed after
+              enactment. Verify every instrument against the linked primary source before relying on it, and treat
+              the absence of an instrument as untested rather than cleared.
+            </footer>
+          </main>
+        </div>
+      </div>
+    </div>
+  );
+}
